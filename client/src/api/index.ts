@@ -68,6 +68,7 @@ export const inventoryAPI = {
   list: (params?: any) => api.get('/inventory', { params }),
   alerts: (params?: any) => api.get('/inventory/alerts', { params }),
   update: (id: string, data: any) => api.put(`/inventory/${id}`, data),
+  batchPurchase: () => api.post('/inventory/batch-purchase'),
 }
 
 // Purchases API
@@ -133,10 +134,17 @@ export const interactionsAPI = {
 }
 
 // Dashboard API
+export interface DashboardParams {
+  days?: number
+  startDate?: string
+  endDate?: string
+}
 export const dashboardAPI = {
-  summary: () => api.get('/dashboard/summary'),
-  trend: (days?: number) => api.get('/dashboard/trend', { params: { days } }),
-  topAnchors: (limit?: number, days?: number) => api.get('/dashboard/top-anchors', { params: { limit, days } }),
+  summary: (params?: DashboardParams) => api.get('/dashboard/summary', { params }),
+  trend: (params?: DashboardParams) => api.get('/dashboard/trend', { params }),
+  topAnchors: (limit?: number, params?: DashboardParams) => api.get('/dashboard/top-anchors', { params: { limit, ...params } }),
+  categoryGmv: (params?: DashboardParams) => api.get('/dashboard/category-gmv', { params }),
+  topProducts: (limit?: number, params?: DashboardParams) => api.get('/dashboard/top-products', { params: { limit, ...params } }),
 }
 
 // System API

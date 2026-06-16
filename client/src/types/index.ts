@@ -217,6 +217,8 @@ export interface DashboardSummary {
   avgConversionRate: number
   totalProducts: number
   stockAlertCount: number
+  dailyAvgGmv: number
+  dailyAvgOrders: number
   gmvChange: number
   ordersChange: number
   conversionChange: number

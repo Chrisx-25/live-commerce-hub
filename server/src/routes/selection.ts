@@ -10,7 +10,8 @@ router.get('/rankings', async (req: Request, res: Response) => {
   try {
     const category = req.query.category as string || '';
     const sortBy = req.query.sort as string || '';
-    const rankings = await getProductRankings(category, sortBy);
+    const search = req.query.search as string || '';
+    const rankings = await getProductRankings(category, sortBy, search);
     return res.json(rankings);
   } catch (err: any) {
     return res.status(500).json({ message: err.message });

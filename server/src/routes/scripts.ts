@@ -12,20 +12,42 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const search = req.query.search as string || '';
 
     let query = knex('Script')
       .leftJoin('Product', 'Script.product_id', 'Product.product_id')
       .leftJoin('Anchor', 'Script.anchor_id', 'Anchor.anchor_id')
       .select('Script.*', 'Product.product_name', 'Anchor.anchor_name');
 
+    if (search) {
+      query = query.where('Product.product_name', 'like', `%${search}%`);
+    }
+
     // MSSQL requires separate count query
-    const [{ count: total }] = await knex('Script')
+    let countQuery = knex('Script')
       .leftJoin('Product', 'Script.product_id', 'Product.product_id')
-      .leftJoin('Anchor', 'Script.anchor_id', 'Anchor.anchor_id')
-      .count('* as count');
+      .leftJoin('Anchor', 'Script.anchor_id', 'Anchor.anchor_id');
+    if (search) {
+      countQuery = countQuery.where('Product.product_name', 'like', `%${search}%`);
+    }
+    const [{ count: total }] = await countQuery.count('* as count');
+
+    // 排序
+    const sortBy = req.query.sortBy as string || '';
+    const sortDir = req.query.sortDir as string || 'asc';
+    const allowedSorts: Record<string, string> = {
+      script_title: 'Script.script_title',
+      product_name: 'Product.product_name',
+      script_type: 'Script.script_type',
+      tags: 'Script.tags',
+      conversion_rate: 'Script.conversion_rate',
+      recommendation_level: 'Script.recommendation_level',
+    };
+    const orderCol = allowedSorts[sortBy] || 'Script.create_time';
+    const direction = sortDir === 'desc' ? 'desc' : 'asc';
 
     const data = await query
-      .orderBy('Script.create_time', 'desc')
+      .orderBy(orderCol, direction)
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 

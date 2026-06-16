@@ -12,6 +12,7 @@ router.get('/', async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const status = req.query.status as string || '';
+    const search = req.query.search as string || '';
 
     let query = knex('PurchaseOrder')
       .join('Supplier', 'PurchaseOrder.supplier_id', 'Supplier.supplier_id')
@@ -25,10 +26,26 @@ router.get('/', async (req: Request, res: Response) => {
       );
 
     if (status) query = query.where('PurchaseOrder.purchase_status', status);
+    if (search) query = query.where('Product.product_name', 'like', `%${search}%`);
+
+    // 排序
+    const sortBy = req.query.sortBy as string || '';
+    const sortDir = req.query.sortDir as string || 'asc';
+    const allowedSorts: Record<string, string> = {
+      product_name: 'Product.product_name',
+      sku_name: 'SKU.sku_name',
+      supplier_name: 'Supplier.supplier_name',
+      purchase_quantity: 'PurchaseOrder.purchase_quantity',
+      purchase_price: 'PurchaseOrder.purchase_price',
+      purchase_status: 'PurchaseOrder.purchase_status',
+      expected_arrival_time: 'PurchaseOrder.expected_arrival_time',
+    };
+    const orderCol = allowedSorts[sortBy] || 'PurchaseOrder.create_time';
+    const direction = sortDir === 'desc' ? 'desc' : 'asc';
 
     const [{ count: total }] = await query.clone().clearSelect().count('* as count');
     const data = await query
-      .orderBy('PurchaseOrder.create_time', 'desc')
+      .orderBy(orderCol, direction)
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 

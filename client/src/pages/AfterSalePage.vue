@@ -14,8 +14,18 @@ const pageSize = 20
 const statusFilter = ref('')
 const typeFilter = ref('')
 const levelFilter = ref('')
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 const loading = ref(false)
 const selectedItem = ref<(AfterSale & Record<string, any>) | null>(null)
+
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  sortBy.value = state.key
+  sortDir.value = state.direction as 'asc' | 'desc'
+  page.value = 1
+  load()
+}
 
 async function load() {
   loading.value = true
@@ -26,6 +36,8 @@ async function load() {
       status: statusFilter.value,
       type: typeFilter.value,
       level: levelFilter.value,
+      sortBy: sortBy.value,
+      sortDir: sortDir.value,
     })
     items.value = data.data
     total.value = data.total
@@ -128,7 +140,7 @@ const columns = [
         <div class="card-header"><span class="card-title">工单列表</span></div>
         <div class="card-divider"></div>
         <div class="card-body">
-          <DataTable :columns="columns" :data="items" :loading="loading" @row-click="selectItem">
+          <DataTable :columns="columns" :data="items" :loading="loading" @row-click="selectItem" @sort-change="handleSortChange">
             <template #cell-problem_description="{ value }">
               <span class="problem-cell">{{ value }}</span>
             </template>

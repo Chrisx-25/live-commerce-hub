@@ -11,8 +11,9 @@ const props = defineProps<{
   rowClass?: string | ((row: T) => string)
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   rowClick: [row: T]
+  sortChange: [state: SortState | null]
 }>()
 
 defineSlots<{
@@ -38,9 +39,11 @@ function toggleSort(col: Column) {
   if (sortState.value?.key === col.key) {
     const direction: SortDirection = sortState.value.direction === 'desc' ? 'asc' : 'desc'
     sortState.value = { key: col.key, direction }
+    emit('sortChange', sortState.value)
     return
   }
   sortState.value = { key: col.key, direction: 'desc' }
+  emit('sortChange', sortState.value)
 }
 
 function getCellValue(row: T, key: string) {

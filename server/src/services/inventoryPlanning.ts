@@ -21,7 +21,8 @@ export interface InventoryPlan {
   reorderPoint: number;
   availableStock: number;
   suggestedQuantity: number;
-  stockRiskLevel: '紧急' | '高' | '中' | '低';
+  stockRiskLevel: '高' | '中' | '低';
+  stockRiskScore: number;
   riskReasons: string[];
 }
 
@@ -62,9 +63,11 @@ export function calculateInventoryPlan(input: InventoryPlanningInput): Inventory
 
   const gap = reorderPoint - availableStock;
   let stockRiskLevel: InventoryPlan['stockRiskLevel'] = '低';
-  if (gap > input.safetyStock || (input.currentStock <= 0 && liveDemand > 0)) stockRiskLevel = '紧急';
+  if (gap > input.safetyStock || (input.currentStock <= 0 && liveDemand > 0)) stockRiskLevel = '高';
   else if (gap > input.safetyStock * 0.5 || liveDemand > availableStock) stockRiskLevel = '高';
   else if (gap > 0 || ((input.productPotentialScore >= 85 || input.isColdStartCandidate) && suggestedQuantity > 0)) stockRiskLevel = '中';
+
+  const stockRiskScore = stockRiskLevel === '高' ? 3 : stockRiskLevel === '中' ? 2 : 1;
 
   return {
     source: input,
@@ -74,6 +77,7 @@ export function calculateInventoryPlan(input: InventoryPlanningInput): Inventory
     availableStock,
     suggestedQuantity,
     stockRiskLevel,
+    stockRiskScore,
     riskReasons,
   };
 }
@@ -148,6 +152,7 @@ export async function buildInventoryPlans(rows: any[]) {
       product_potential_score: plan.source.productPotentialScore,
       suggested_quantity: plan.suggestedQuantity,
       stock_risk_level: plan.stockRiskLevel,
+      stock_risk_score: plan.stockRiskScore,
       suggestion_reason: plan.riskReasons.join('；'),
     };
   });

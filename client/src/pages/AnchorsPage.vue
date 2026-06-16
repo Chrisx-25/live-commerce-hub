@@ -19,6 +19,8 @@ const page = ref(1)
 const pageSize = 20
 const search = ref('')
 const levelFilter = ref('')
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 const loading = ref(false)
 
 const showModal = ref(false)
@@ -114,10 +116,18 @@ const chartOptions = {
 const levels = ['S', 'A', 'B', 'C']
 const platforms = ['抖音', '快手']
 
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  sortBy.value = state.key
+  sortDir.value = state.direction as 'asc' | 'desc'
+  page.value = 1
+  load()
+}
+
 async function load() {
   loading.value = true
   try {
-    const { data } = await anchorsAPI.list({ page: page.value, pageSize, search: search.value, level: levelFilter.value })
+    const { data } = await anchorsAPI.list({ page: page.value, pageSize, search: search.value, level: levelFilter.value, sortBy: sortBy.value, sortDir: sortDir.value })
     anchors.value = data.data
     total.value = data.total
   } finally { loading.value = false }
@@ -217,7 +227,7 @@ const columns = [
       <button class="btn" @click="load()">刷新</button>
     </div>
 
-    <DataTable :columns="columns" :data="anchors" :loading="loading">
+    <DataTable :columns="columns" :data="anchors" :loading="loading" @sort-change="handleSortChange">
       <template #cell-compare="{ row }">
         <span class="compare-check" :class="{ checked: selectedIds.has(row.anchor_id) }" @click="toggleSelect(row.anchor_id)">
           <span v-if="selectedIds.has(row.anchor_id)" class="compare-check-mark">&#10003;</span>

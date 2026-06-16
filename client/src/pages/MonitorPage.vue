@@ -53,6 +53,12 @@ function formatDuration(sec: number) {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
+function formatMMSS(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60)
+  const s = Math.floor(totalSeconds % 60)
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
 async function loadSession() {
   try {
     const { data } = await liveSessionsAPI.get(sessionId.value)
@@ -92,7 +98,7 @@ function connectSSE() {
       labels: timeLabels.value,
       online: onlineHistory.value,
       gmv: gmvHistory.value,
-      label: new Date().toLocaleTimeString(),
+      label: formatMMSS(metrics.value.duration),
       onlineValue: metrics.value.online,
       gmvValue: metrics.value.gmv,
       maxPoints: 60,

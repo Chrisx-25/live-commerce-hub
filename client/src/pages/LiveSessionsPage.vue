@@ -16,15 +16,30 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 20
 const statusFilter = ref('')
+const search = ref('')
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 const loading = ref(false)
 const statusCounts = ref<Record<string, number>>({})
 let loadRequestId = 0
+
+function doSearch() {
+  page.value = 1
+  load()
+}
+
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  sortBy.value = state.key
+  sortDir.value = state.direction as 'asc' | 'desc'
+  load()
+}
 
 async function load() {
   const requestId = ++loadRequestId
   loading.value = true
   try {
-    const { data } = await liveSessionsAPI.list({ page: page.value, pageSize, status: statusFilter.value })
+    const { data } = await liveSessionsAPI.list({ page: page.value, pageSize, status: statusFilter.value, search: search.value, sortBy: sortBy.value, sortDir: sortDir.value })
     if (requestId !== loadRequestId) return
     sessions.value = data.data
     total.value = data.total
@@ -113,6 +128,8 @@ const columns = [
   <PageHeader title="直播场次" subtitle="场次安排与管理" />
   <div class="page-body">
     <div class="toolbar">
+      <input v-model="search" class="input" placeholder="搜索标题/主播/平台/品类..." @keyup.enter="doSearch()" style="width:240px;" />
+      <button class="btn" @click="doSearch()">搜索</button>
       <select v-model="statusFilter" class="form-select" style="width:auto;" @change="onStatusSelectChange">
         <option value="">全部状态</option>
         <option value="待安排">待安排</option>
@@ -140,7 +157,7 @@ const columns = [
       </button>
     </div>
 
-    <DataTable :columns="columns" :data="sessions" :loading="loading" :row-class="getSessionRowClass" @row-click="goSession">
+    <DataTable :columns="columns" :data="sessions" :loading="loading" :row-class="getSessionRowClass" @row-click="goSession" @sort-change="handleSortChange">
       <template #cell-start_time="{ value }">{{ formatDate(value) }}</template>
       <template #cell-live_status="{ value }">
         <StatusBadge :status="value" />

@@ -21,9 +21,23 @@ router.get('/', async (req: Request, res: Response) => {
     if (level) query = query.where('anchor_level', level);
     if (status) query = query.where('status', status);
 
+    const sortBy = req.query.sortBy as string || '';
+    const sortDir = req.query.sortDir as string || 'asc';
+    const allowedSorts: Record<string, string> = {
+      anchor_name: 'anchor_name',
+      gender: 'gender',
+      join_date: 'join_date',
+      account_platform: 'account_platform',
+      fan_count: 'fan_count',
+      specialization: 'specialization',
+      anchor_level: 'anchor_level',
+      status: 'status',
+    };
     const [{ count: total }] = await query.clone().clearSelect().count('* as count');
+    const orderCol = allowedSorts[sortBy] || 'fan_count';
+    const direction = sortDir === 'desc' ? 'desc' : 'asc';
     const data = await query
-      .orderBy('fan_count', 'desc')
+      .orderBy(orderCol, direction)
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 

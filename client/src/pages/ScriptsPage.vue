@@ -12,6 +12,9 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
+const search = ref('')
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 
 // Generate modal
 const showGenerate = ref(false)
@@ -77,10 +80,22 @@ const filteredProducts = computed(() => {
   return list
 })
 
+function doSearch() {
+  page.value = 1
+  load()
+}
+
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  sortBy.value = state.key
+  sortDir.value = state.direction as 'asc' | 'desc'
+  load()
+}
+
 async function load() {
   loading.value = true
   try {
-    const { data } = await scriptsAPI.list({ page: page.value, pageSize })
+    const { data } = await scriptsAPI.list({ page: page.value, pageSize, search: search.value, sortBy: sortBy.value, sortDir: sortDir.value })
     scripts.value = data.data
     total.value = data.total
   } finally { loading.value = false }
@@ -159,11 +174,13 @@ const columns = [
   <PageHeader title="脚本管理" subtitle="AI 生成直播带货逐字稿" />
   <div class="page-body">
     <div class="toolbar">
+      <input v-model="search" class="input" placeholder="搜索商品名称..." @keyup.enter="doSearch()" style="width:200px;" />
+      <button class="btn" @click="doSearch()">搜索</button>
       <button class="btn primary" @click="openGenerate">+ AI 生成脚本</button>
       <button class="btn" @click="load()">刷新</button>
     </div>
 
-    <DataTable :columns="columns" :data="scripts" :loading="loading">
+    <DataTable :columns="columns" :data="scripts" :loading="loading" @sort-change="handleSortChange">
       <template #cell-script_title="{ value }">
         <span class="script-title-cell">{{ value }}</span>
       </template>

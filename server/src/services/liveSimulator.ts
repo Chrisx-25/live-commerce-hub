@@ -108,8 +108,15 @@ function remember<T>(items: T[], item: T, max: number) {
   if (items.length > max) items.pop();
 }
 
+function formatMMSS(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
 function pushSeriesPoint(state: SimulatorState) {
-  state.timeLabels.push(new Date().toLocaleTimeString());
+  const duration = Math.floor((Date.now() - state.startTime.getTime()) / 1000);
+  state.timeLabels.push(formatMMSS(duration));
   state.onlineHistory.push(state.online);
   state.gmvHistory.push(Math.round(state.gmv * 100) / 100);
   if (state.timeLabels.length > 60) state.timeLabels.shift();
@@ -123,8 +130,9 @@ export function createWarmupSeries(nowMs: number, seconds: number, baseOnline: n
   const gmvValues: number[] = [];
   const points = 6;
   for (let index = points - 1; index >= 0; index--) {
-    const pointTime = new Date(nowMs - index * (seconds / (points - 1)) * 1000);
-    labels.push(pointTime.toLocaleTimeString());
+    // Spread labels evenly across the preload duration (in seconds)
+    const elapsedSec = Math.round(seconds * (1 - (index / (points - 1))));
+    labels.push(formatMMSS(elapsedSec));
     online.push(Math.max(50, Math.round(baseOnline + Math.sin(index + baseOnline) * 120 - index * 18)));
     gmvValues.push(Math.max(0, Math.round((gmv * (points - index)) / points)));
   }

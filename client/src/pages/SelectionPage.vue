@@ -10,6 +10,7 @@ const advisorReport = ref<any>(null)
 const loading = ref(false)
 const categoryFilter = ref('')
 const sortBy = ref('')
+const search = ref('')
 const selectedProductId = ref('')
 const selectedProductName = ref('')
 const advisorReportLoading = ref(false)
@@ -19,10 +20,22 @@ const coldStartError = ref('')
 
 const categories = ['女装', '美妆', '箱包', '运动户外', '零食', '家居用品', '母婴', '数码', '食品饮料']
 
+function doSearch() {
+  load()
+}
+
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  // 去掉 scores. 前缀以匹配后端 sort 参数
+  const sortKey = state.key.startsWith('scores.') ? state.key.replace('scores.', '') : state.key
+  sortBy.value = sortKey
+  load()
+}
+
 async function load() {
   loading.value = true
   try {
-    const { data } = await selectionAPI.rankings({ category: categoryFilter.value, sort: sortBy.value })
+    const { data } = await selectionAPI.rankings({ category: categoryFilter.value, sort: sortBy.value, search: search.value })
     rankings.value = data
   } finally { loading.value = false }
 }
@@ -135,6 +148,8 @@ const recColumns = [
   <PageHeader title="选品分析" subtitle="智能推荐引擎 / 数字顾问 / 品类关联" />
   <div class="page-body">
     <div class="toolbar">
+      <input v-model="search" class="input" placeholder="搜索商品名称..." @keyup.enter="doSearch()" style="width:200px;" />
+      <button class="btn" @click="doSearch()">搜索</button>
       <select v-model="categoryFilter" class="form-select" style="width:auto;" @change="load()">
         <option value="">全部分类</option>
         <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
@@ -304,7 +319,7 @@ const recColumns = [
       <div class="card-header"><span class="card-title">智能选品排名 (五维评分)</span></div>
       <div class="card-divider"></div>
       <div class="card-body">
-        <DataTable :columns="rankColumns" :data="rankings" :loading="loading" @row-click="selectProduct">
+        <DataTable :columns="rankColumns" :data="rankings" :loading="loading" @row-click="selectProduct" @sort-change="handleSortChange">
           <template #cell-product_name="{ row }">
             <span style="font-weight:600;">{{ row.product_name }}</span>
             <span v-if="row.isColdStartCandidate" class="new-product-mark">新品</span>

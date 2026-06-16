@@ -4,14 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "C:\\Progra~1\\nodejs\\node.exe ./node_modules/vite/bin/vite.js",
-    "build": "vue-tsc -b && C:\\Progra~1\\nodejs\\node.exe ./node_modules/vite/bin/vite.js build",
-    "preview": "C:\\Progra~1\\nodejs\\node.exe ./node_modules/vite/bin/vite.js preview",
-    "test:realtime": "C:\\Progra~1\\nodejs\\node.exe ../server/node_modules/tsx/dist/cli.mjs src/utils/realtimeSeries.test.ts",
-    "test:table": "C:\\Progra~1\\nodejs\\node.exe ../server/node_modules/tsx/dist/cli.mjs src/utils/tableSort.test.ts",
-    "test:live-navigation": "C:\\Progra~1\\nodejs\\node.exe ../server/node_modules/tsx/dist/cli.mjs src/utils/liveNavigation.test.ts",
-    "test:live-status": "C:\\Progra~1\\nodejs\\node.exe ../server/node_modules/tsx/dist/cli.mjs src/utils/liveSessionStatus.test.ts",
-    "test:live-review-import": "C:\\Progra~1\\nodejs\\node.exe ../server/node_modules/tsx/dist/cli.mjs src/pages/LiveReviewPage.import.test.ts"
+    "dev": "npx vite",
+    "build": "vue-tsc -b && npx vite build",
+    "preview": "npx vite preview",
+    "test:realtime": "npx tsx src/utils/realtimeSeries.test.ts",
+    "test:table": "npx tsx src/utils/tableSort.test.ts",
+    "test:live-navigation": "npx tsx src/utils/liveNavigation.test.ts",
+    "test:live-status": "npx tsx src/utils/liveSessionStatus.test.ts",
+    "test:live-review-import": "npx tsx src/pages/LiveReviewPage.import.test.ts"
   },
   "dependencies": {
     "axios": "^1.16.1",

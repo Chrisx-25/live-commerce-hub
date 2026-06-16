@@ -15,20 +15,38 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 20
 const statusFilter = ref('')
+const search = ref('')
+const sortBy = ref('')
+const sortDir = ref<'asc' | 'desc'>('asc')
 const loading = ref(false)
 const showAlerts = ref(false)
 const showQuickPurchase = ref(false)
 const selectedInventory = ref<any>(null)
 const quickForm = ref({ purchase_quantity: 0, purchase_price: 0, expected_arrival_time: '' })
+const batchPurchasing = ref(false)
+const showBatchConfirm = ref(false)
+const batchResult = ref<{ created: number; skipped: number } | null>(null)
 
 const alertTotal = ref(0)
 const alertPage = ref(1)
 const alertPageSize = 20
 
+function doSearch() {
+  page.value = 1
+  load()
+}
+
+function handleSortChange(state: { key: string; direction: string } | null) {
+  if (!state) return
+  sortBy.value = state.key
+  sortDir.value = state.direction as 'asc' | 'desc'
+  load()
+}
+
 async function load() {
   loading.value = true
   try {
-    const { data } = await inventoryAPI.list({ page: page.value, pageSize, status: statusFilter.value })
+    const { data } = await inventoryAPI.list({ page: page.value, pageSize, status: statusFilter.value, search: search.value, sortBy: sortBy.value, sortDir: sortDir.value })
     items.value = data.data
     total.value = data.total
   } finally { loading.value = false }
@@ -87,14 +105,34 @@ async function saveQuickPurchase() {
   if (showAlerts.value) await fetchAlerts()
 }
 
+function openBatchConfirm() {
+  showBatchConfirm.value = true
+}
+
+async function batchPurchaseAll() {
+  if (batchPurchasing.value) return
+  showBatchConfirm.value = false
+  batchPurchasing.value = true
+  try {
+    const { data } = await inventoryAPI.batchPurchase()
+    batchResult.value = data
+    await load()
+    if (showAlerts.value) await fetchAlerts()
+  } catch (e: any) {
+    alert(e.response?.data?.message || '批量采购失败')
+  } finally {
+    batchPurchasing.value = false
+  }
+}
+
 function riskType(level: string) {
-  if (level === '紧急' || level === '高') return 'danger'
+  if (level === '高') return 'danger'
   if (level === '中') return 'warning'
   return 'success'
 }
 
 const riskSummary = computed(() => {
-  const urgent = items.value.filter((item) => ['紧急', '高'].includes(item.stock_risk_level)).length
+  const urgent = items.value.filter((item) => item.stock_risk_level === '高').length
   const live = items.value.filter((item) => (item.upcoming_live_demand || 0) > 0).length
   const inbound = items.value.reduce((sum, item) => sum + Number(item.inbound_purchase_quantity || 0), 0)
   const suggested = items.value.reduce((sum, item) => sum + Number(item.suggested_quantity || 0), 0)
@@ -133,6 +171,8 @@ const alertColumns = [
   <PageHeader title="库存管理" subtitle="库存预警与仓库管理" />
   <div class="page-body">
     <div class="toolbar">
+      <input v-model="search" class="input" placeholder="搜索商品名称..." @keyup.enter="doSearch()" style="width:200px;" />
+      <button class="btn" @click="doSearch()">搜索</button>
       <select v-model="statusFilter" class="form-select" style="width:auto;" @change="load()">
         <option value="">全部状态</option>
         <option value="正常">正常</option>
@@ -140,6 +180,9 @@ const alertColumns = [
       </select>
       <button class="btn" :class="{ primary: showAlerts }" @click="loadAlerts">
         {{ showAlerts ? '隐藏预警' : '库存预警' }}
+      </button>
+      <button class="btn primary" :disabled="batchPurchasing" @click="openBatchConfirm">
+        {{ batchPurchasing ? '生成中...' : '一键采购' }}
       </button>
       <button class="btn" @click="load()">刷新</button>
     </div>
@@ -182,7 +225,7 @@ const alertColumns = [
           </template>
           <template #cell-actions="{ row }">
             <button class="btn small primary" :disabled="!row.supplier_id || !row.suggested_quantity" @click.stop="openQuickPurchase(row)">
-              一键采购
+              采购
             </button>
           </template>
         </DataTable>
@@ -192,9 +235,9 @@ const alertColumns = [
     </div>
 
     <!-- Main Inventory Table -->
-    <DataTable :columns="columns" :data="items" :loading="loading">
+    <DataTable :columns="columns" :data="items" :loading="loading" @sort-change="handleSortChange">
       <template #cell-current_stock="{ row }">
-        <span :style="{ color: ['紧急', '高'].includes(row.stock_risk_level) ? 'var(--vermillion)' : 'var(--ink)', fontWeight: ['紧急', '高'].includes(row.stock_risk_level) ? '600' : '400' }">
+        <span :style="{ color: row.stock_risk_level === '高' ? 'var(--vermillion)' : 'var(--ink)', fontWeight: row.stock_risk_level === '高' ? '600' : '400' }">
           {{ row.current_stock }}
         </span>
       </template>
@@ -208,7 +251,7 @@ const alertColumns = [
       </template>
       <template #cell-actions="{ row }">
         <button class="btn small primary" :disabled="!row.supplier_id || !row.suggested_quantity" @click.stop="openQuickPurchase(row)">
-          一键采购
+          采购
         </button>
       </template>
     </DataTable>
@@ -218,7 +261,7 @@ const alertColumns = [
     <div v-if="showQuickPurchase && selectedInventory" class="modal-overlay" @click.self="showQuickPurchase = false">
       <div class="modal" style="min-width:560px;padding-top:16px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-          <span class="modal-title" style="margin-bottom:0;">库存一键采购</span>
+          <span class="modal-title" style="margin-bottom:0;">快速采购</span>
           <span class="modal-close" @click="showQuickPurchase = false">&times;</span>
         </div>
         <div class="purchase-context">
@@ -245,6 +288,42 @@ const alertColumns = [
         <div class="form-actions">
           <button class="btn" @click="showQuickPurchase = false">取消</button>
           <button class="btn primary" @click="saveQuickPurchase">生成采购单</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Purchase Confirm Modal -->
+    <div v-if="showBatchConfirm" class="modal-overlay" @click.self="showBatchConfirm = false">
+      <div class="modal" style="min-width:400px;max-width:480px;padding-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <span class="modal-title" style="margin-bottom:0;">一键采购确认</span>
+          <span class="modal-close" @click="showBatchConfirm = false">&times;</span>
+        </div>
+        <p style="font-size:14px;color:var(--ink-mid);line-height:1.7;margin-bottom:20px;">
+          将为所有<strong style="color:var(--vermillion);">建议采购数量 > 0</strong> 的商品生成采购单，确认继续？
+        </p>
+        <div class="form-actions">
+          <button class="btn" @click="showBatchConfirm = false">取消</button>
+          <button class="btn primary" @click="batchPurchaseAll">确认生成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Purchase Result Modal -->
+    <div v-if="batchResult" class="modal-overlay" @click.self="batchResult = null">
+      <div class="modal" style="min-width:360px;max-width:420px;padding-top:16px;text-align:center;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <span class="modal-title" style="margin-bottom:0;">采购完成</span>
+          <span class="modal-close" @click="batchResult = null">&times;</span>
+        </div>
+        <p style="font-size:15px;color:var(--ink);margin-bottom:8px;">
+          成功生成 <strong style="color:var(--success);font-size:22px;">{{ batchResult.created }}</strong> 张采购单
+        </p>
+        <p v-if="batchResult.skipped > 0" style="font-size:13px;color:var(--ink-soft);">
+          跳过 {{ batchResult.skipped }} 条
+        </p>
+        <div class="form-actions" style="justify-content:center;margin-top:16px;">
+          <button class="btn primary" @click="batchResult = null">确定</button>
         </div>
       </div>
     </div>

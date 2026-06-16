@@ -1,45 +1,124 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Line } from 'vue-chartjs'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { Line, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  ArcElement,
   Title,
   Tooltip,
   Filler,
   Legend,
 } from 'chart.js'
 import { dashboardAPI } from '../api'
+import type { DashboardParams } from '../api'
 import type { DashboardSummary } from '../types'
 import PageHeader from '../components/PageHeader.vue'
 import KpiCard from '../components/KpiCard.vue'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Filler, Legend)
 
+const router = useRouter()
 const summary = ref<DashboardSummary | null>(null)
 const trend = ref<any[]>([])
 const topAnchors = ref<any[]>([])
+const categoryGmv = ref<any[]>([])
+const topProducts = ref<any[]>([])
 const loading = ref(true)
-const dashboardDays = 30
 
-onMounted(async () => {
+// --- Period state ---
+const periodMode = ref<'preset' | 'custom'>('preset')
+const dashboardDays = ref(30)
+const customStart = ref('')
+const customEnd = ref('')
+const appliedStart = ref('')
+const appliedEnd = ref('')
+
+const presetOptions = [
+  { label: '7天', value: 7 },
+  { label: '14天', value: 14 },
+  { label: '30天', value: 30 },
+  { label: '60天', value: 60 },
+  { label: '90天', value: 90 },
+]
+
+function initCustomDates() {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(start.getDate() - 29)
+  customEnd.value = end.toISOString().split('T')[0]
+  customStart.value = start.toISOString().split('T')[0]
+}
+
+const currentParams = computed<DashboardParams>(() => {
+  if (periodMode.value === 'custom' && appliedStart.value && appliedEnd.value) {
+    return { startDate: appliedStart.value, endDate: appliedEnd.value }
+  }
+  return { days: dashboardDays.value }
+})
+
+async function loadDashboard() {
+  loading.value = true
   try {
-    const [s, t, a] = await Promise.all([
-      dashboardAPI.summary(),
-      dashboardAPI.trend(dashboardDays),
-      dashboardAPI.topAnchors(5, dashboardDays),
+    const params = currentParams.value
+    const [s, t, a, c, p] = await Promise.all([
+      dashboardAPI.summary(params),
+      dashboardAPI.trend(params),
+      dashboardAPI.topAnchors(5, params),
+      dashboardAPI.categoryGmv(params),
+      dashboardAPI.topProducts(10, params),
     ])
     summary.value = s.data
     trend.value = t.data
     topAnchors.value = a.data
+    categoryGmv.value = c.data
+    topProducts.value = p.data
   } catch (e) {
     console.error('Failed to load dashboard:', e)
   } finally {
     loading.value = false
   }
+}
+
+function selectPreset(days: number) {
+  dashboardDays.value = days
+}
+
+function applyCustomRange() {
+  if (!customStart.value || !customEnd.value) return
+  if (customStart.value > customEnd.value) {
+    const tmp = customStart.value
+    customStart.value = customEnd.value
+    customEnd.value = tmp
+  }
+  appliedStart.value = customStart.value
+  appliedEnd.value = customEnd.value
+  loadDashboard()
+}
+
+watch([dashboardDays, appliedStart, appliedEnd], () => {
+  loadDashboard()
+})
+
+function switchMode(mode: 'preset' | 'custom') {
+  periodMode.value = mode
+  if (mode === 'custom' && !customStart.value) {
+    initCustomDates()
+  }
+  if (mode === 'preset') {
+    loadDashboard()
+  } else if (mode === 'custom' && appliedStart.value) {
+    loadDashboard()
+  }
+}
+
+onMounted(() => {
+  initCustomDates()
+  loadDashboard()
 })
 
 function formatCurrency(v: number) {
@@ -49,9 +128,11 @@ function formatCurrency(v: number) {
 
 function formatNumber(v: number) {
   if (v >= 10000) return (v / 10000).toFixed(1) + '万'
-  return v.toLocaleString()
+  if (Number.isInteger(v)) return v.toLocaleString()
+  return v.toFixed(1)
 }
 
+// ====== Trend chart ======
 const chartData = computed(() => ({
   labels: trend.value.map((t: any) => {
     const d = new Date(t.date)
@@ -91,18 +172,13 @@ const chartData = computed(() => ({
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
-  interaction: {
-    mode: 'index' as const,
-    intersect: false,
-  },
+  interaction: { mode: 'index' as const, intersect: false },
   plugins: {
     legend: {
       position: 'top' as const,
       align: 'end' as const,
       labels: {
-        boxWidth: 12,
-        boxHeight: 3,
-        padding: 20,
+        boxWidth: 12, boxHeight: 3, padding: 20,
         font: { family: "'Noto Sans SC', sans-serif", size: 12 },
         color: '#3A3A3A',
       },
@@ -111,83 +187,149 @@ const chartOptions = computed(() => ({
       backgroundColor: '#111111',
       titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
       bodyFont: { family: "'Noto Sans SC', sans-serif", size: 13 },
-      padding: 12,
-      cornerRadius: 2,
+      padding: 12, cornerRadius: 2,
     },
   },
   scales: {
     x: {
       grid: { display: false },
-      ticks: {
-        font: { family: "'JetBrains Mono', monospace", size: 10 },
-        color: '#6A6A64',
-        maxTicksLimit: 14,
-      },
+      ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, color: '#6A6A64', maxTicksLimit: 14 },
     },
     y: {
-      type: 'linear' as const,
-      position: 'left' as const,
+      type: 'linear' as const, position: 'left' as const,
       grid: { color: '#DDD8C7' },
       ticks: {
-        font: { family: "'JetBrains Mono', monospace", size: 10 },
-        color: '#6A6A64',
+        font: { family: "'JetBrains Mono', monospace", size: 10 }, color: '#6A6A64',
         callback: (v: any) => v >= 10000 ? (v / 10000).toFixed(0) + '万' : v,
       },
       beginAtZero: true,
     },
     y1: {
-      type: 'linear' as const,
-      position: 'right' as const,
+      type: 'linear' as const, position: 'right' as const,
       grid: { drawOnChartArea: false },
-      ticks: {
-        font: { family: "'JetBrains Mono', monospace", size: 10 },
-        color: '#6A6A64',
-      },
+      ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, color: '#6A6A64' },
       beginAtZero: true,
     },
   },
 }))
+
+// ====== Category GMV donut ======
+const CATEGORY_COLORS = [
+  '#C41E3A', '#3A3A3A', '#B58940', '#2D6A4F', '#2C5F8A',
+  '#B85C1A', '#6A6A64', '#8B6F47', '#4A7C59', '#7C3A5C',
+  '#A0522D', '#556B2F',
+]
+
+const categoryTotalGmv = computed(() => categoryGmv.value.reduce((s: number, c: any) => s + c.gmv, 0))
+
+const categoryChartData = computed(() => {
+  if (!categoryGmv.value.length) return { labels: [], datasets: [] }
+  return {
+    labels: categoryGmv.value.map((c: any) => c.category),
+    datasets: [{
+      data: categoryGmv.value.map((c: any) => c.gmv),
+      backgroundColor: categoryGmv.value.map((_: any, i: number) => CATEGORY_COLORS[i % CATEGORY_COLORS.length]),
+      borderColor: 'var(--paper)',
+      borderWidth: 2,
+      hoverBorderColor: 'var(--ink)',
+    }],
+  }
+})
+
+const categoryChartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '55%',
+  plugins: {
+    legend: {
+      position: 'right' as const,
+      labels: {
+        boxWidth: 10, boxHeight: 10, padding: 14,
+        font: { family: "'Noto Sans SC', sans-serif", size: 12 },
+        color: '#3A3A3A',
+        usePointStyle: true,
+      },
+    },
+    tooltip: {
+      backgroundColor: '#111111',
+      titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
+      bodyFont: { family: "'Noto Sans SC', sans-serif", size: 13 },
+      padding: 12, cornerRadius: 2,
+      callbacks: {
+        label: (ctx: any) => {
+          const pct = categoryTotalGmv.value ? ((ctx.raw / categoryTotalGmv.value) * 100).toFixed(1) : '0'
+          return ` ${ctx.label}: ¥${(ctx.raw / 10000).toFixed(1)}万 (${pct}%)`
+        },
+      },
+    },
+  },
+}))
+
+// ====== TOP10 products ======
+const topProductMax = computed(() => Math.max(...topProducts.value.map((p: any) => p.gmv || 0), 1))
+
+// ====== TOP5 anchors ======
+const topAnchorMax = computed(() => Math.max(...topAnchors.value.map((a: any) => Number(a.total_gmv || 0)), 1))
 
 function getLevelClass(level: string) {
   return `level-${level}`
 }
 
 const periodText = computed(() => {
-  if (!summary.value?.period) return `近${dashboardDays}天`
-  return `${summary.value.period.label} · ${summary.value.period.startDate} 至 ${summary.value.period.endDate}`
+  if (!summary.value?.period) return '—'
+  return `${summary.value.period.startDate} 至 ${summary.value.period.endDate}`
 })
 
-const topAnchorMax = computed(() => Math.max(...topAnchors.value.map((a: any) => Number(a.total_gmv || 0)), 1))
+function goInventory() {
+  router.push('/inventory')
+}
+
+const canApplyCustom = computed(() => customStart.value && customEnd.value)
 </script>
 
 <template>
   <PageHeader title="运营数据总览" subtitle="直播电商业务全景" />
   <div class="page-body">
-    <div class="period-banner" v-if="summary">
-      <div>
-        <span class="period-label">统计周期</span>
-        <strong>{{ periodText }}</strong>
+    <!-- Period Selector -->
+    <div class="period-bar" v-if="summary">
+      <div class="period-mode-row">
+        <button class="mode-toggle" :class="{ active: periodMode === 'preset' }" @click="switchMode('preset')">快捷周期</button>
+        <button class="mode-toggle" :class="{ active: periodMode === 'custom' }" @click="switchMode('custom')">自定义</button>
+        <div class="preset-chips" v-if="periodMode === 'preset'">
+          <button v-for="opt in presetOptions" :key="opt.value" class="period-chip" :class="{ active: dashboardDays === opt.value }" @click="selectPreset(opt.value)">{{ opt.label }}</button>
+        </div>
+        <div class="custom-dates" v-if="periodMode === 'custom'">
+          <input type="date" class="date-input" v-model="customStart" :max="customEnd || undefined" />
+          <span class="date-sep">至</span>
+          <input type="date" class="date-input" v-model="customEnd" :min="customStart || undefined" />
+          <button class="btn small primary" :disabled="!canApplyCustom" @click="applyCustomRange">应用</button>
+        </div>
+        <span class="period-range-text">统计周期：{{ periodText }}</span>
       </div>
-      <div>
-        <span class="period-label">对比口径</span>
-        <strong>{{ summary.period?.compareLabel || '较前30天' }}</strong>
-      </div>
-      <div>
-        <span class="period-label">库存口径</span>
-        <strong>{{ summary.period?.stockSnapshotLabel || '当前快照' }}</strong>
+    </div>
+
+    <!-- Loading skeleton -->
+    <div class="kpi-row" v-if="loading && !summary">
+      <div class="kpi-card skeleton" v-for="i in 4" :key="i">
+        <div class="skel-line w-24"></div>
+        <div class="skel-line w-32 h-10"></div>
+        <div class="skel-line w-20 mt-2"></div>
       </div>
     </div>
 
     <!-- KPI Row -->
     <div class="kpi-row" v-if="summary">
-      <KpiCard label="GMV 总销售额" :value="formatCurrency(summary.totalGmv)" :change="`${summary.gmvChange > 0 ? '+' : ''}${summary.gmvChange}% 环比`" :change-type="summary.gmvChange >= 0 ? 'up' : 'down'" />
-      <KpiCard label="总订单数" :value="formatNumber(summary.totalOrders)" :change="`${summary.ordersChange > 0 ? '+' : ''}${summary.ordersChange}% 环比`" :change-type="summary.ordersChange >= 0 ? 'up' : 'down'" />
+      <KpiCard label="GMV 总销售额" :value="formatCurrency(summary.totalGmv)" :sub-value="'日均 ' + formatCurrency(summary.dailyAvgGmv)" :change="`${summary.gmvChange > 0 ? '+' : ''}${summary.gmvChange}% 环比`" :change-type="summary.gmvChange >= 0 ? 'up' : 'down'" />
+      <KpiCard label="总订单数" :value="formatNumber(summary.totalOrders)" :sub-value="'日均 ' + formatNumber(summary.dailyAvgOrders) + ' 单'" :change="`${summary.ordersChange > 0 ? '+' : ''}${summary.ordersChange}% 环比`" :change-type="summary.ordersChange >= 0 ? 'up' : 'down'" />
       <KpiCard label="平均转化率" :value="summary.avgConversionRate?.toFixed(1) + '%'" :change="`${summary.conversionChange > 0 ? '+' : ''}${summary.conversionChange}% 环比`" :change-type="summary.conversionChange >= 0 ? 'up' : 'down'" />
-      <KpiCard label="库存告警 SKU" :value="summary.stockAlertCount" :change="'需及时补货'" change-type="neutral" />
+      <div class="kpi-card-wrap">
+        <KpiCard label="库存告警 SKU" :value="summary.stockAlertCount" change="需及时补货" change-type="neutral" />
+        <button class="btn small primary kpi-card-btn" @click="goInventory">查看库存 →</button>
+      </div>
     </div>
 
-    <!-- Charts Section -->
-    <div class="section-grid">
+    <!-- Charts Row 1: Sales Trend + Category GMV Donut -->
+    <div class="charts-row">
       <div class="card">
         <div class="card-header">
           <span class="card-title">销售趋势</span>
@@ -198,11 +340,54 @@ const topAnchorMax = computed(() => Math.max(...topAnchors.value.map((a: any) =>
           <div class="chart-wrap" v-if="trend.length">
             <Line :data="chartData" :options="chartOptions" />
           </div>
-          <div v-else style="padding:20px;color:var(--ink-soft);">暂无趋势数据</div>
+          <div v-else class="empty-hint">暂无趋势数据</div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">品类 GMV 占比</span>
+          <span class="card-extra">{{ categoryGmv.length }} 个品类</span>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+          <div class="donut-wrap" v-if="categoryGmv.length">
+            <Doughnut :data="categoryChartData" :options="categoryChartOptions" />
+          </div>
+          <div v-else class="empty-hint">暂无品类数据</div>
+        </div>
+      </div>
+    </div>
 
-      <!-- Top Anchors -->
+    <!-- Charts Row 2: TOP10 Products + TOP5 Anchors -->
+    <div class="rankings-row">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">商品排行 TOP10</span>
+          <span class="card-extra">GMV 贡献</span>
+        </div>
+        <div class="card-divider"></div>
+        <div class="card-body">
+          <div v-if="topProducts.length" class="product-list">
+            <div class="product-item" v-for="(p, idx) in topProducts" :key="p.productId">
+              <span class="product-rank" :class="{ t1: idx === 0, t2: idx === 1, t3: idx === 2 }">{{ idx + 1 }}</span>
+              <div class="product-info">
+                <div class="product-name-row">
+                  <span class="product-name">{{ p.productName }}</span>
+                  <span class="product-gmv">{{ formatCurrency(p.gmv) }}</span>
+                </div>
+                <div class="product-meta">
+                  <span class="cat-tag">{{ p.category }}</span>
+                  <span class="qty-text">{{ p.quantity }} 件</span>
+                </div>
+                <div class="product-track">
+                  <i :style="{ width: `${Math.max(4, p.gmv / topProductMax * 100)}%` }"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="empty-hint">暂无商品数据</div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-header">
           <span class="card-title">主播排名 TOP5</span>
@@ -229,7 +414,7 @@ const topAnchorMax = computed(() => Math.max(...topAnchors.value.map((a: any) =>
               </div>
             </div>
           </div>
-          <div v-else style="padding:20px;color:var(--ink-soft);">暂无数据</div>
+          <div v-else class="empty-hint">暂无数据</div>
         </div>
       </div>
     </div>
@@ -237,71 +422,149 @@ const topAnchorMax = computed(() => Math.max(...topAnchors.value.map((a: any) =>
 </template>
 
 <style scoped>
-.period-banner {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 16px;
+/* ===== Period Selector ===== */
+.period-bar { margin-bottom: var(--space-lg); }
+
+.period-mode-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+
+.mode-toggle {
+  padding: 5px 0 3px;
+  border: none; border-bottom: 2px solid transparent;
+  background: none;
+  font-family: var(--font-sans); font-size: 13px; font-weight: 500;
+  color: var(--ink-soft); cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.mode-toggle:hover { color: var(--ink); }
+.mode-toggle.active {
+  color: var(--ink); border-bottom-color: var(--vermillion); font-weight: 600;
+}
+
+.preset-chips { display: flex; gap: 0; border: 1px solid var(--rule); overflow: hidden; }
+.period-chip {
+  padding: 6px 18px; border: none; border-right: 1px solid var(--rule);
+  background: var(--paper); font-family: var(--font-mono); font-size: 12px;
+  color: var(--ink); cursor: pointer; transition: all var(--duration-fast);
+}
+.period-chip:last-child { border-right: none; }
+.period-chip:hover { background: var(--paper-dark); }
+.period-chip.active { background: var(--vermillion-soft); color: var(--vermillion); font-weight: 600; }
+
+.custom-dates { display: flex; align-items: center; gap: 10px; }
+.date-input {
+  padding: 5px 10px; border: 1px solid var(--rule); background: var(--paper);
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink); width: 148px;
+  transition: border-color var(--duration-fast);
+}
+.date-input:focus { outline: none; border-color: var(--vermillion); }
+.date-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+.date-sep { font-size: 13px; color: var(--ink-soft); }
+
+.period-range-text {
+  margin-left: auto; font-family: var(--font-mono); font-size: 12px;
+  color: var(--ink-soft); white-space: nowrap;
+}
+
+/* ===== KPI card wrapper ===== */
+.kpi-card-wrap { position: relative; height: 100%; }
+.kpi-card-wrap :deep(.kpi-card) { height: 100%; }
+.kpi-card-btn { position: absolute; bottom: 12px; right: 16px; font-size: 11px; }
+
+/* ===== Charts layout ===== */
+.charts-row {
+  display: grid; grid-template-columns: 3fr 2fr; gap: var(--space-lg);
   margin-bottom: var(--space-lg);
-  padding: 14px 18px;
-  border: 1px solid var(--rule-soft);
-  background: var(--paper-dark);
+}
+.rankings-row {
+  display: grid; grid-template-columns: 7fr 4fr; gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
 }
 
-.period-banner div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+/* ===== Skeleton ===== */
+.skeleton { animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.skel-line { height: 14px; background: var(--rule-soft); border-radius: 2px; }
+.skel-line.w-24 { width: 60%; }
+.skel-line.w-32 { width: 80%; }
+.skel-line.w-20 { width: 50%; }
+.skel-line.h-10 { height: 38px; margin: 8px 0; }
+.skel-line.mt-2 { margin-top: 8px; }
+
+/* ===== Chart ===== */
+.chart-wrap { width: 100%; height: 280px; position: relative; }
+.chart-wrap canvas { width: 100% !important; height: 100% !important; }
+.donut-wrap { width: 100%; height: 280px; position: relative; display: flex; justify-content: center; }
+.donut-wrap canvas { max-width: 100% !important; max-height: 100% !important; }
+.empty-hint { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 13px; }
+
+/* ===== TOP10 Products ===== */
+.product-list { display: flex; flex-direction: column; }
+.product-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--rule-soft);
+}
+.product-item:last-child { border-bottom: none; padding-bottom: 0; }
+.product-item:first-child { padding-top: 0; }
+
+.product-rank {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  color: var(--ink-soft); background: var(--paper-dark); border-radius: 2px;
+  flex-shrink: 0; margin-top: 1px;
+}
+.product-rank.t1 { background: var(--vermillion); color: #fff; }
+.product-rank.t2 { background: var(--ink-mid); color: #fff; }
+.product-rank.t3 { background: var(--gold); color: #fff; }
+
+.product-info { flex: 1; min-width: 0; }
+.product-name-row {
+  display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+}
+.product-name {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.product-gmv {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--ink); white-space: nowrap; flex-shrink: 0;
+}
+.product-meta {
+  display: flex; align-items: center; gap: 8px; margin-top: 3px;
+}
+.cat-tag {
+  display: inline-block; padding: 1px 8px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--ink-soft);
+  border: 1px solid var(--rule); background: var(--paper);
+}
+.qty-text { font-size: 11px; color: var(--ink-soft); }
+.product-track {
+  height: 5px; margin-top: 6px; background: rgba(17, 17, 17, 0.06); overflow: hidden;
+}
+.product-track i {
+  display: block; height: 100%; background: var(--ink-mid);
+  transition: width var(--duration-normal);
 }
 
-.period-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-soft);
-  letter-spacing: 0.06em;
-}
-
-.period-banner strong {
-  font-size: 14px;
-  color: var(--ink);
-}
-
-.chart-wrap {
-  width: 100%;
-  height: 300px;
-  position: relative;
-}
-.chart-wrap canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.ranked-anchor {
-  align-items: flex-start;
-}
-
+/* ===== Anchor ranking ===== */
+.ranked-anchor { align-items: flex-start; }
 .anchor-name-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: baseline;
+  display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
 }
-
 .rank-track {
-  height: 7px;
-  margin-top: 8px;
-  background: rgba(17, 17, 17, 0.08);
-  overflow: hidden;
+  height: 7px; margin-top: 8px; background: rgba(17, 17, 17, 0.08); overflow: hidden;
 }
+.rank-track i { display: block; height: 100%; background: var(--vermillion); }
 
-.rank-track i {
-  display: block;
-  height: 100%;
-  background: var(--vermillion);
+@media (max-width: 1100px) {
+  .charts-row { grid-template-columns: 1fr; }
+  .rankings-row { grid-template-columns: 1fr; }
 }
-
 @media (max-width: 900px) {
-  .period-banner {
-    grid-template-columns: 1fr;
-  }
+  .period-mode-row { flex-direction: column; align-items: flex-start; }
+  .period-range-text { margin-left: 0; }
+  .preset-chips { flex-wrap: wrap; }
+  .custom-dates { flex-wrap: wrap; }
 }
 </style>

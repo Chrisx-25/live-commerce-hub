@@ -289,7 +289,7 @@ async function getCategoryAverages(category: string) {
   };
 }
 
-export async function getProductRankings(category?: string, sortBy?: string) {
+export async function getProductRankings(category?: string, sortBy?: string, search?: string) {
   let query = knex('Product')
     .leftJoin('ProductPerformance', 'Product.product_id', 'ProductPerformance.product_id')
     .select(
@@ -312,6 +312,9 @@ export async function getProductRankings(category?: string, sortBy?: string) {
 
   if (category) {
     query = query.where('Product.category', category);
+  }
+  if (search) {
+    query = query.where('Product.product_name', 'like', `%${search}%`);
   }
 
   const products = await query;

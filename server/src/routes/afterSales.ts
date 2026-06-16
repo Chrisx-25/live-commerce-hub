@@ -23,9 +23,22 @@ router.get('/', async (req: Request, res: Response) => {
     if (type) query = query.where('AfterSale.aftersale_type', type);
     if (level) query = query.where('AfterSale.complaint_level', level);
 
+    const sortBy = req.query.sortBy as string || '';
+    const sortDir = req.query.sortDir as string || 'asc';
+    const allowedSorts: Record<string, string> = {
+      aftersale_type: 'AfterSale.aftersale_type',
+      process_status: 'AfterSale.process_status',
+      refund_amount: 'AfterSale.refund_amount',
+      complaint_level: 'AfterSale.complaint_level',
+      create_time: 'AfterSale.create_time',
+      order_amount: '[Order].order_amount',
+      nickname: 'User.nickname',
+    };
     const [{ count: total }] = await query.clone().clearSelect().count('* as count');
+    const orderCol = allowedSorts[sortBy] || 'AfterSale.create_time';
+    const direction = sortDir === 'desc' ? 'desc' : 'asc';
     const data = await query
-      .orderBy('AfterSale.create_time', 'desc')
+      .orderBy(orderCol, direction)
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 

@@ -43,16 +43,42 @@ router.get('/', async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const status = req.query.status as string || '';
+    const search = req.query.search as string || '';
 
     let query = knex('LiveSession')
       .join('Anchor', 'LiveSession.anchor_id', 'Anchor.anchor_id')
       .select('LiveSession.*', 'Anchor.anchor_name');
 
     if (status) query = query.where('LiveSession.live_status', status);
+    if (search) {
+      query = query.where(function () {
+        this.where('LiveSession.live_title', 'like', `%${search}%`)
+          .orWhere('Anchor.anchor_name', 'like', `%${search}%`)
+          .orWhere('LiveSession.platform', 'like', `%${search}%`)
+          .orWhere('LiveSession.live_category', 'like', `%${search}%`);
+      });
+    }
 
     const [{ count: total }] = await query.clone().clearSelect().count('* as count');
+
+    // 排序
+    const sortBy = req.query.sortBy as string || '';
+    const sortDir = req.query.sortDir as string || 'asc';
+    const allowedSorts: Record<string, string> = {
+      live_title: 'LiveSession.live_title',
+      anchor_name: 'Anchor.anchor_name',
+      platform: 'LiveSession.platform',
+      live_category: 'LiveSession.live_category',
+      start_time: 'LiveSession.start_time',
+      live_status: 'LiveSession.live_status',
+      online_peak: 'LiveSession.online_peak',
+      total_sales: 'LiveSession.total_sales',
+    };
+    const orderCol = allowedSorts[sortBy] || 'LiveSession.start_time';
+    const direction = sortDir === 'desc' ? 'desc' : 'asc';
+
     const data = await query
-      .orderBy('LiveSession.start_time', 'desc')
+      .orderBy(orderCol, direction)
       .offset((page - 1) * pageSize)
       .limit(pageSize);
 
