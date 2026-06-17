@@ -3,17 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "npx tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "tsx run-migrate.ts",
-    "migrate:rollback": "knex migrate:rollback --knexfile src/db/knexfile.ts",
-    "seed": "tsx run-seed.ts",
-    "seed:acceptance": "tsx run-acceptance-seed.ts",
-    "db:reset": "npx kill-port 3000; sleep 2; tsx db-restore.ts && npm run dev",
-    "db:backup": "tsx db-snapshot.ts --save",
-    "db:regenerate": "tsx run-migrate.ts && tsx run-seed.ts && tsx llm-enhance-seed.ts",
-    "test:acceptance": "tsx src/services/selectionEngine.test.ts && tsx src/services/inventoryPlanning.test.ts && tsx src/services/liveSimulator.test.ts && tsx src/services/liveReviewEngine.test.ts && tsx src/services/anchorProductFitEngine.test.ts && tsx src/services/anchorProductPlanningService.test.ts && tsx src/services/systemReset.test.ts && tsx src/db/acceptanceSeed.test.ts"
+    "migrate": "npx tsx run-migrate.ts",
+    "migrate:rollback": "npx knex migrate:rollback --knexfile src/db/knexfile.ts",
+    "seed": "npx tsx run-seed.ts",
+    "seed:acceptance": "npx tsx run-acceptance-seed.ts",
+    "db:reset": "npx kill-port 3000; sleep 2; npx tsx db-restore.ts && npm run dev",
+    "db:backup": "npx tsx db-snapshot.ts --save",
+    "db:regenerate": "npx tsx run-migrate.ts && npx tsx run-seed.ts && npx tsx llm-enhance-seed.ts",
+    "test:acceptance": "npx tsx src/services/selectionEngine.test.ts && npx tsx src/services/inventoryPlanning.test.ts && npx tsx src/services/liveSimulator.test.ts && npx tsx src/services/liveReviewEngine.test.ts && npx tsx src/services/anchorProductFitEngine.test.ts && npx tsx src/services/anchorProductPlanningService.test.ts && npx tsx src/db/acceptanceSeed.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

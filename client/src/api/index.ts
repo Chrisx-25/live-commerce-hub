@@ -151,11 +151,6 @@ export const dashboardAPI = {
   topProducts: (limit?: number, params?: DashboardParams) => api.get('/dashboard/top-products', { params: { limit, ...params } }),
 }
 
-// System API
-export const systemAPI = {
-  reset: () => api.post('/system/reset'),
-}
-
 // Selection API
 export const selectionAPI = {
   rankings: (params?: any) => api.get('/selection/rankings', { params }),

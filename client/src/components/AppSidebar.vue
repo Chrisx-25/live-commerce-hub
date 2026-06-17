@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
@@ -11,21 +11,17 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
-  RotateCcw,
   Target,
   Truck,
   Users,
   Video,
   Warehouse,
 } from 'lucide-vue-next'
-import { systemAPI } from '../api'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
-const resetting = ref(false)
-
 type MenuItem = {
   path: string
   label: string
@@ -71,26 +67,6 @@ function navigate(path: string) {
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(path + '/')
-}
-
-async function resetSystem() {
-  if (resetting.value) return
-  const confirmed = window.confirm('确定要复位系统数据吗？当前模拟数据会恢复到验收初始状态。')
-  if (!confirmed) return
-
-  resetting.value = true
-  try {
-    const { data } = await systemAPI.reset()
-    const counts = data?.counts
-      ? `\n直播场次 ${data.counts.liveSessions}，商品 ${data.counts.products}，主播 ${data.counts.anchors}`
-      : ''
-    window.alert(`${data?.message || '系统已复位'}${counts}`)
-    window.location.reload()
-  } catch (e: any) {
-    window.alert(e.response?.data?.message || '系统复位失败')
-  } finally {
-    resetting.value = false
-  }
 }
 
 function logout() {
@@ -147,10 +123,6 @@ const roleLabels: Record<string, string> = {
         <button class="icon-btn" type="button" title="退出登录" @click="logout">
           <LogOut :size="15" />
           <span>退出</span>
-        </button>
-        <button v-if="auth.roles.includes('系统管理员')" class="icon-btn reset-btn" type="button" :disabled="resetting" title="复位验收数据" @click="resetSystem">
-          <RotateCcw :size="15" />
-          <span>{{ resetting ? '复位中' : '复位' }}</span>
         </button>
       </div>
     </div>
@@ -254,7 +226,6 @@ const roleLabels: Record<string, string> = {
 .user-role { font-size: 11px; }
 .footer-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 .icon-btn {
@@ -272,8 +243,4 @@ const roleLabels: Record<string, string> = {
 }
 .icon-btn:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .icon-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.reset-btn {
-  border-color: rgba(188, 125, 43, 0.45);
-  color: var(--warning);
-}
 </style>
