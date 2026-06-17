@@ -39,8 +39,7 @@ router.get('/', async (req: Request, res: Response) => {
     query = query.leftJoin('Supplier', 'Product.supplier_id', 'Supplier.supplier_id');
 
     if (warehouse) query = query.where('Inventory.warehouse_name', warehouse);
-    if (status === '不足') query = query.where('Inventory.current_stock', '<=', knex.raw('Inventory.safety_stock'));
-    else if (status === '正常') query = query.where('Inventory.current_stock', '>', knex.raw('Inventory.safety_stock'));
+    if (status) query = query.where('Inventory.inventory_status', status);
     if (search) query = query.where('Product.product_name', 'like', `%${search}%`);
 
     // 排序
@@ -110,7 +109,7 @@ router.get('/alerts', async (req: Request, res: Response) => {
         'Supplier.delivery_cycle'
       )
       .leftJoin('Supplier', 'Product.supplier_id', 'Supplier.supplier_id')
-      .where('Inventory.current_stock', '<=', knex.raw('Inventory.safety_stock'));
+      .whereIn('Inventory.inventory_status', ['不足', '缺货']);
 
     const [{ count: total }] = await base.clone().clearSelect().count('* as count');
 
