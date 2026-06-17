@@ -9,6 +9,7 @@
     "migrate": "cd server && npm run migrate",
     "seed": "cd server && npm run seed",
     "seed:acceptance": "cd server && npm run seed:acceptance",
+    "update": "git pull origin wkl && npm install && cd server && npm install && cd ../client && npm install && cd .. && cd server && npm run db:reset && cd ..",
     "db:reset": "cd server && npm run db:reset",
     "db:backup": "cd server && npm run db:backup",
     "db:regenerate": "cd server && npm run db:regenerate",
