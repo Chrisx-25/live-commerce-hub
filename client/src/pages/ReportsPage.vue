@@ -94,12 +94,16 @@ const columns = [
     <div class="toolbar">
       <select v-model="typeFilter" class="form-select" style="width:auto;" @change="load()">
         <option value="">全部类型</option>
-        <option value="周报">周报</option>
-        <option value="月报">月报</option>
-        <option value="季报">季报</option>
+        <option value="销售日报">日报</option>
+        <option value="销售周报">周报</option>
+        <option value="销售月报">月报</option>
+        <option value="销售季报">季报</option>
         <option value="专项分析">专项分析</option>
-        <option value="选品专项">选品专项</option>
-        <option value="售后专项">售后专项</option>
+        <option value="选品分析">选品分析</option>
+        <option value="售后分析">售后分析</option>
+        <option value="库存分析">库存分析</option>
+        <option value="主播绩效">主播绩效</option>
+        <option value="综合报告">综合报告</option>
       </select>
       <button class="btn" @click="load()">刷新</button>
     </div>
