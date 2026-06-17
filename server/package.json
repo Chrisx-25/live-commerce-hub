@@ -11,7 +11,7 @@
     "seed": "npx tsx run-seed.ts",
     "seed:acceptance": "npx tsx run-acceptance-seed.ts",
     "db:reset": "npx kill-port 3000; sleep 2; npx tsx db-restore.ts && npm run dev",
-    "db:backup": "npx tsx db-snapshot.ts --save",
+    "db:save": "npx tsx db-save.ts",
     "db:regenerate": "npx tsx run-migrate.ts && npx tsx run-seed.ts && npx tsx llm-enhance-seed.ts",
     "test:acceptance": "npx tsx src/services/selectionEngine.test.ts && npx tsx src/services/inventoryPlanning.test.ts && npx tsx src/services/liveSimulator.test.ts && npx tsx src/services/liveReviewEngine.test.ts && npx tsx src/services/anchorProductFitEngine.test.ts && npx tsx src/services/anchorProductPlanningService.test.ts && npx tsx src/db/acceptanceSeed.test.ts"
   },
