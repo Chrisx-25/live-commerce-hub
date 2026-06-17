@@ -1,9 +1,9 @@
 /**
- * db-restore.ts — 从 MSSQL 备份文件恢复数据库
+ * db-restore.ts — 从 MSSQL 备份文件恢复数据库（支持 .bak 和 .bak.gz）
  *
  * 用法:
- *   npx tsx db-restore.ts                       恢复默认备份文件
- *   npx tsx db-restore.ts --bak <path>          指定备份文件路径
+ *   npx tsx db-restore.ts                       恢复默认备份文件（优先 .bak.gz，其次 .bak）
+ *   npx tsx db-restore.ts --bak <path>          指定备份文件路径（支持 .bak.gz，自动解压）
  *   npx tsx db-restore.ts --list                列出可用备份文件
  *
  * 前置条件:
@@ -15,34 +15,85 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as zlib from 'zlib';
+import * as stream from 'stream';
+import { promisify } from 'util';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+const pipeline = promisify(stream.pipeline);
 
 const DB_NAME = process.env.DB_NAME || 'live_commerce_hub';
 const DB_HOST = process.env.DB_HOST || 'localhost';
 const DB_USER = process.env.DB_USER || 'sa';
 const DB_PASSWORD = process.env.DB_PASSWORD || 'a123456';
 const BACKUP_DIR = path.resolve(__dirname, 'db-backups');
+const DEFAULT_BAK_GZ = path.join(BACKUP_DIR, 'live_commerce_hub_2026-06-17.bak.gz');
 const DEFAULT_BAK = path.join(BACKUP_DIR, 'live_commerce_hub_2026-06-17.bak');
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function listBackups() {
   if (!fs.existsSync(BACKUP_DIR)) {
     console.log('  (没有备份目录)');
     return [];
   }
-  const files = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.endsWith('.bak'))
+
+  const allFiles = fs.readdirSync(BACKUP_DIR)
+    .filter(f => f.endsWith('.bak') || f.endsWith('.bak.gz'))
     .map(f => {
       const fp = path.join(BACKUP_DIR, f);
       const stat = fs.statSync(fp);
-      return { name: f, path: fp, size: stat.size, mtime: stat.mtime };
+      return { name: f, path: fp, size: stat.size, mtime: stat.mtime, compressed: f.endsWith('.gz') };
     })
     .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-  return files;
+  return allFiles;
+}
+
+/**
+ * Decompress .bak.gz → .bak (side-by-side in same directory).
+ * Skips if the .bak already exists and is newer than the .gz.
+ */
+function decompressIfNeeded(gzPath: string): string {
+  const bakPath = gzPath.replace(/\.gz$/, '');
+
+  if (fs.existsSync(bakPath)) {
+    const gzStat = fs.statSync(gzPath);
+    const bakStat = fs.statSync(bakPath);
+    if (bakStat.mtime >= gzStat.mtime) {
+      console.log(`  (已存在解压文件: ${path.basename(bakPath)}，跳过解压)`);
+      return bakPath;
+    }
+  }
+
+  console.log(`  解压中: ${path.basename(gzPath)} → ${path.basename(bakPath)} (${formatSize(fs.statSync(gzPath).size)})...`);
+  const start = Date.now();
+  const gunzip = zlib.createGunzip();
+  const source = fs.createReadStream(gzPath);
+  const dest = fs.createWriteStream(bakPath);
+
+  execSync(
+    `gzip -d -c "${gzPath}" > "${bakPath}"`,
+    { encoding: 'utf-8', timeout: 60000 }
+  );
+
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+  const bakSize = formatSize(fs.statSync(bakPath).size);
+  console.log(`  解压完成: ${bakSize} (${elapsed}s)`);
+  return bakPath;
 }
 
 function restore(bakPath: string) {
+  // Auto-decompress .bak.gz if needed
+  if (bakPath.endsWith('.gz')) {
+    bakPath = decompressIfNeeded(bakPath);
+  }
+
   if (!fs.existsSync(bakPath)) {
     console.error(`✗ 备份文件不存在: ${bakPath}`);
     process.exit(1);
@@ -129,7 +180,8 @@ if (args.includes('--list')) {
     console.log('  (无)');
   } else {
     for (const f of files) {
-      console.log(`  ${f.name}  (${(f.size / 1024 / 1024).toFixed(1)} MB, ${f.mtime.toISOString()})`);
+      const marker = f.compressed ? '(压缩)' : '';
+      console.log(`  ${f.name}  (${formatSize(f.size)}${marker}, ${f.mtime.toISOString()})`);
     }
   }
   console.log('');
@@ -137,6 +189,12 @@ if (args.includes('--list')) {
 }
 
 const bakIndex = args.indexOf('--bak');
-const bakPath = bakIndex >= 0 ? path.resolve(args[bakIndex + 1]) : DEFAULT_BAK;
+let bakPath: string;
+if (bakIndex >= 0) {
+  bakPath = path.resolve(args[bakIndex + 1]);
+} else {
+  // Prefer .bak.gz if available, fall back to .bak
+  bakPath = fs.existsSync(DEFAULT_BAK_GZ) ? DEFAULT_BAK_GZ : DEFAULT_BAK;
+}
 
 restore(bakPath);

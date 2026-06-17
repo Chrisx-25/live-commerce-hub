@@ -40,8 +40,10 @@ Desktop.ini
 # ===== Test screenshots (optional, can be large) =====
 test_screenshots/
 
-# ===== Database backups (large binary files) =====
-server/db-backups/
+# ===== Database backups =====
+# Ignore raw .bak (too large for GitHub), but allow compressed .bak.gz
+server/db-backups/*.bak
+!server/db-backups/*.bak.gz
 server/db/export.sql
 server/db/*.bak
 

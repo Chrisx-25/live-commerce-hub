@@ -102,12 +102,33 @@ client/src/
 npm run db:reset   →   从备份文件恢复全库 (db-restore.ts)
 ```
 
-- **备份文件**: `server/db-backups/live_commerce_hub_2026-06-17.bak` (103MB, 28表/333,705行)
-- **恢复方式**: sqlcmd RESTORE DATABASE WITH REPLACE
+- **备份文件（仓库内）**: `server/db-backups/live_commerce_hub_2026-06-17.bak.gz` (30MB, gzip 压缩，已纳入 Git)
+- **解压后**: `server/db-backups/live_commerce_hub_2026-06-17.bak` (103MB, 28表/333,705行)
+- **恢复方式**: `db-restore.ts` 自动检测 `.bak.gz`，先解压再通过 sqlcmd RESTORE DATABASE WITH REPLACE 恢复
 - **前置条件**: MSSQL 运行中，sa 密码正确（从 .env 读取）
 - **注意事项**: 恢复期间自动断开所有连接 (SINGLE_USER)，恢复后需重启后端
 - **列出备份**: `npx tsx db-restore.ts --list`
-- **手动指定备份**: `npx tsx db-restore.ts --bak <path>`
+- **手动指定备份**: `npx tsx db-restore.ts --bak <path>`（支持 .bak 和 .bak.gz）
+
+#### 新队友快速上手
+
+```bash
+# 1. 克隆仓库
+git clone <repo-url> && cd live-commerce-hub
+
+# 2. 配置 .env（从 .env.example 复制，填入 MSSQL sa 密码）
+cp server/.env.example server/.env
+
+# 3. 安装依赖
+npm install && cd server && npm install && cd ../client && npm install && cd ..
+
+# 4. 恢复数据库（自动解压 .bak.gz → .bak → RESTORE）
+cd server && npm run db:reset
+
+# 5. 启动项目
+cd .. && npm run dev
+# 前端 :5173 | 后端 :3000 | 默认账号 EMP001/123456
+```
 
 ### 数据库生成 (db:regenerate) — 仅开发/改表结构时使用
 
