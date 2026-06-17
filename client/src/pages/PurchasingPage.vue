@@ -259,23 +259,23 @@ onMounted(async () => {
 })
 
 const columns = [
-  { key: 'product_name', label: '商品' },
-  { key: 'sku_name', label: 'SKU' },
-  { key: 'supplier_name', label: '供应商' },
-  { key: 'purchase_quantity', label: '数量' },
-  { key: 'purchase_price', label: '采购价' },
-  { key: 'purchase_status', label: '状态' },
-  { key: 'expected_arrival_time', label: '预计到货' },
+  { key: 'product_name', label: '商品', width: '24%' },
+  { key: 'sku_name', label: 'SKU', width: '20%' },
+  { key: 'supplier_name', label: '供应商', width: '14%' },
+  { key: 'purchase_quantity', label: '数量', width: '8%' },
+  { key: 'purchase_price', label: '采购价', width: '8%' },
+  { key: 'purchase_status', label: '状态', width: '10%' },
+  { key: 'expected_arrival_time', label: '预计到货', width: '16%' },
 ]
 
 const sugColumns = [
-  { key: 'product_name', label: '商品' },
-  { key: 'sku_name', label: 'SKU' },
-  { key: 'warehouse_name', label: '仓库' },
-  { key: 'current_stock', label: '当前库存' },
-  { key: 'safety_stock', label: '安全库存' },
-  { key: 'suggested_quantity', label: '建议采购' },
-  { key: 'stock_risk_level', label: '风险等级' },
+  { key: 'product_name', label: '商品', width: '20%' },
+  { key: 'sku_name', label: 'SKU', width: '18%' },
+  { key: 'warehouse_name', label: '仓库', width: '12%' },
+  { key: 'current_stock', label: '当前库存', width: '10%' },
+  { key: 'safety_stock', label: '安全库存', width: '10%' },
+  { key: 'suggested_quantity', label: '建议采购', width: '10%' },
+  { key: 'stock_risk_level', label: '风险等级', width: '10%' },
 ]
 </script>
 

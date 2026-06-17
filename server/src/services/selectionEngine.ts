@@ -431,12 +431,13 @@ export async function getRecommendations(productId: string) {
 
 // Category trends
 export async function getCategoryTrends() {
-  const categories = await knex('Product')
-    .select('category')
-    .count('* as product_count')
-    .sum(knex.raw('(SELECT SUM(order_amount) FROM [Order] JOIN SKU ON [Order].sku_id = SKU.sku_id WHERE SKU.product_id IN (SELECT product_id FROM Product WHERE category = P.category)) as total_gmv'))
-    .from('Product as P')
-    .groupBy('category');
+  const categories = await knex('Product as P')
+    .leftJoin('SKU', 'P.product_id', 'SKU.product_id')
+    .leftJoin('[Order]', 'SKU.sku_id', '[Order].sku_id')
+    .select('P.category')
+    .countDistinct('P.product_id as product_count')
+    .sum('[Order].order_amount as total_gmv')
+    .groupBy('P.category');
 
   return categories;
 }

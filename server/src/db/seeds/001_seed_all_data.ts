@@ -10,6 +10,7 @@ const ANCHOR_LEVELS = ['S', 'A', 'B', 'C'];
 const CATEGORIES = ['女装', '美妆', '箱包', '运动户外', '零食', '家居用品', '母婴', '数码', '食品饮料'];
 
 const CORE_ANCHORS = [
+  { name: '王凯乐', specialization: '美妆', level: 'S', platform: '抖音', fans: 5800000 },
   { name: '李佳琦', specialization: '美妆', level: 'S', platform: '抖音', fans: 8500000 },
   { name: '薇娅', specialization: '女装', level: 'S', platform: '抖音', fans: 7200000 },
   { name: '罗永浩', specialization: '数码', level: 'A', platform: '抖音', fans: 5600000 },
@@ -27,7 +28,7 @@ const CORE_EMPLOYEES = [
   { id: 'EMP002', name: '李运营', department: '运营部', position: '运营主管', role: '运营人员' },
   { id: 'EMP003', name: '王采购', department: '采购部', position: '采购专员', role: '采购人员' },
   { id: 'EMP004', name: '赵仓储', department: '仓储部', position: '仓储主管', role: '仓储人员' },
-  { id: 'EMP005', name: '陈主播', department: '直播部', position: '主播', role: '主播' },
+  { id: 'EMP005', name: '王凯乐', department: '直播部', position: '主播', role: '主播' },
   { id: 'EMP006', name: '刘系统', department: '技术部', position: '系统管理员', role: '系统管理员' },
 ];
 
@@ -80,18 +81,20 @@ export async function seed(knex: Knex): Promise<void> {
   ];
   await knex('Permission').insert(permissions);
 
+  // RBAC mapping — matches acceptance seed (16/16/5/5/7/20 = 69 rows)
   const allPerms = permissions.map(p => p.permission_id);
-  const opPerms = ['PERM001','PERM002','PERM004','PERM007','PERM008','PERM009','PERM010','PERM011','PERM013','PERM016','PERM018','PERM019','PERM020'];
-  const purchPerms = ['PERM001','PERM005','PERM006','PERM010','PERM014'];
-  const whPerms = ['PERM001','PERM006','PERM014'];
-  const anchorPerms = ['PERM001','PERM008','PERM009','PERM015'];
+  const mgmtPerms    = ['PERM001','PERM002','PERM003','PERM004','PERM007','PERM008','PERM009','PERM010','PERM011','PERM013','PERM014','PERM015','PERM016','PERM018','PERM019','PERM020'];
+  const opPerms      = ['PERM001','PERM002','PERM003','PERM004','PERM007','PERM008','PERM009','PERM010','PERM011','PERM013','PERM014','PERM015','PERM016','PERM018','PERM019','PERM020'];
+  const purchPerms   = ['PERM001','PERM005','PERM010','PERM014','PERM016'];
+  const whPerms      = ['PERM001','PERM006','PERM010','PERM014','PERM016'];
+  const anchorPerms  = ['PERM001','PERM007','PERM008','PERM010','PERM015','PERM018','PERM019'];
   const ap: { relation_id: string; role_id: string; permission_id: string }[] = [];
-  for (const p of allPerms) ap.push({ relation_id: id(), role_id: 'ROLE001', permission_id: p });
-  for (const p of allPerms) ap.push({ relation_id: id(), role_id: 'ROLE006', permission_id: p });
-  for (const p of opPerms) ap.push({ relation_id: id(), role_id: 'ROLE002', permission_id: p });
-  for (const p of purchPerms) ap.push({ relation_id: id(), role_id: 'ROLE003', permission_id: p });
-  for (const p of whPerms) ap.push({ relation_id: id(), role_id: 'ROLE004', permission_id: p });
+  for (const p of mgmtPerms)   ap.push({ relation_id: id(), role_id: 'ROLE001', permission_id: p });
+  for (const p of opPerms)     ap.push({ relation_id: id(), role_id: 'ROLE002', permission_id: p });
+  for (const p of purchPerms)  ap.push({ relation_id: id(), role_id: 'ROLE003', permission_id: p });
+  for (const p of whPerms)     ap.push({ relation_id: id(), role_id: 'ROLE004', permission_id: p });
   for (const p of anchorPerms) ap.push({ relation_id: id(), role_id: 'ROLE005', permission_id: p });
+  for (const p of allPerms)    ap.push({ relation_id: id(), role_id: 'ROLE006', permission_id: p });
   await knex('RolePermission').insert(ap);
 
   // ===== 2. Employees =====
@@ -126,7 +129,7 @@ export async function seed(knex: Knex): Promise<void> {
     anchors.push({
       anchor_id: id(),
       anchor_name: a.name,
-      gender: ['李佳琦','罗永浩','散打哥','董先生','刘畊宏'].includes(a.name) ? '男' : '女',
+      gender: ['王凯乐','李佳琦','罗永浩','散打哥','董先生','刘畊宏'].includes(a.name) ? '男' : '女',
       join_date: faker.date.between({ from: '2023-01-01', to: '2024-12-31' }).toISOString().split('T')[0],
       account_platform: a.platform,
       fan_count: a.fans,
@@ -149,6 +152,9 @@ export async function seed(knex: Knex): Promise<void> {
     });
   }
   await knex('Anchor').insert(anchors);
+
+  // Link EMP005 (王凯乐) to the first anchor
+  await knex('Employee').where('employee_id', 'EMP005').update({ anchor_id: anchors[0].anchor_id });
 
   // ===== 4. Users =====
   console.log('[4/8] 用户 (8000)...');
@@ -198,8 +204,26 @@ export async function seed(knex: Knex): Promise<void> {
   }
   await knex.batchInsert('LiveSession', sessions, BATCH);
 
-  // ===== 6. KPIIndicators =====
-  console.log('[6/8] KPI指标...');
+  // ===== 6. Suppliers =====
+  console.log('[6/9] 供应商 (30)...');
+  await knex('Supplier').del();
+  const suppliers: any[] = [];
+  for (let i = 0; i < 30; i++) {
+    suppliers.push({
+      supplier_id: id(),
+      supplier_name: faker.company.name(),
+      contact_person: faker.person.fullName(),
+      contact_phone: faker.phone.number(),
+      address: faker.location.streetAddress({ useFullAddress: true }),
+      cooperation_status: faker.helpers.arrayElement(['合作中', '合作中', '合作中', '观察中']),
+      supplier_score: parseFloat((70 + Math.random() * 28).toFixed(1)),
+      delivery_cycle: faker.number.int({ min: 2, max: 14 }),
+    });
+  }
+  await knex('Supplier').insert(suppliers);
+
+  // ===== 7. KPIIndicators =====
+  console.log('[7/9] KPI指标...');
   await knex('KPIIndicator').del();
   await knex('KPIIndicator').insert([
     { indicator_id: id(), indicator_name: 'GMV增长率', indicator_type: '财务', target_value: 15, statistical_period: '月度', applicable_role: '管理层' },
@@ -212,8 +236,8 @@ export async function seed(knex: Knex): Promise<void> {
     { indicator_id: id(), indicator_name: '粉丝增长率', indicator_type: '主播', target_value: 10, statistical_period: '月度', applicable_role: '主播' },
   ]);
 
-  // ===== 7. InterfaceLogs =====
-  console.log('[7/8] 接口日志 (500)...');
+  // ===== 8. InterfaceLogs =====
+  console.log('[8/9] 接口日志 (500)...');
   await knex('InterfaceLog').del();
   const logs: any[] = [];
   for (let i = 0; i < 500; i++) {
@@ -229,8 +253,8 @@ export async function seed(knex: Knex): Promise<void> {
   }
   await knex.batchInsert('InterfaceLog', logs, BATCH);
 
-  // ===== 8. OperationReports (structure only, content by LLM) =====
-  console.log('[8/8] 运营报告框架 (20)...');
+  // ===== 9. OperationReports (structure only, content by LLM) =====
+  console.log('[9/9] 运营报告框架 (20)...');
   await knex('OperationReport').del();
   const reports: any[] = [];
   const reportTypes = ['周报', '月报', '季报', '专项分析'];

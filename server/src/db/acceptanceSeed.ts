@@ -15,7 +15,7 @@ const EMPLOYEES = [
   { employee_id: 'EMP002', employee_name: '李运营', department: '运营部', position: '运营主管', role_id: 'ROLE002' },
   { employee_id: 'EMP003', employee_name: '王采购', department: '采购部', position: '采购专员', role_id: 'ROLE003' },
   { employee_id: 'EMP004', employee_name: '赵仓储', department: '仓储部', position: '仓储主管', role_id: 'ROLE004' },
-  { employee_id: 'EMP005', employee_name: '陈主播', department: '直播部', position: '主播', role_id: 'ROLE005' },
+  { employee_id: 'EMP005', employee_name: '王凯乐', department: '直播部', position: '主播', role_id: 'ROLE005', anchor_id: 'A001' },
   { employee_id: 'EMP006', employee_name: '刘系统', department: '技术部', position: '系统管理员', role_id: 'ROLE006' },
 ];
 
@@ -41,7 +41,7 @@ const PERMISSIONS = [
 }));
 
 const ANCHORS = [
-  ['A001', '林夏', '女', '抖音', '美妆', 'S', 5800000],
+  ['A001', '王凯乐', '女', '抖音', '美妆', 'S', 5800000],
   ['A002', '周野', '男', '抖音', '数码', 'A', 3900000],
   ['A003', '赵琪', '女', '快手', '女装', 'A', 3200000],
   ['A004', '沈航', '男', '淘宝直播', '运动户外', 'B', 1800000],
@@ -411,30 +411,63 @@ async function insertBatches(knex: Knex, table: string, rows: any[], batchSize =
 
 export async function seedAcceptanceData(knex: Knex) {
   const data = buildAcceptancePreview();
+  // FK-safe delete order: children before parents; handle missing tables gracefully
   const clearOrder = [
+    // Migration 003 tables (may not exist)
     'LivePlanItem', 'LivePlan', 'AnchorProductFit',
+    // Migration 002 tables (may not exist)
     'LiveSessionMetrics', 'ProductReview', 'LiveSessionReview',
+    // Leaf tables (no incoming FKs from other business tables)
     'UserBehaviorStat', 'InterfaceLog', 'OperationReport', 'KPIIndicator',
-    'PurchaseSuggestion', 'ProductPerformance', 'AnchorPerformance', 'AfterSale',
-    'InteractionLog', '[Order]', 'Script', 'PurchaseOrder', 'Inventory', 'SKU',
-    'Product', 'LiveSession', 'Supplier', 'EmployeeRole', 'RolePermission',
+    'PurchaseSuggestion',
+    // Children of LiveSession + Product + [Order]
+    'ProductPerformance', 'AnchorPerformance',
+    'AfterSale',        // → [Order]
+    'InteractionLog',   // → LiveSession
+    '[Order]',          // → LiveSession, SKU, User
+    'Script',           // → Product, LiveSession
+    'PurchaseOrder',    // → SKU, Supplier
+    'Inventory',        // → SKU
+    'SKU',              // → Product
+    'Product',          // → Supplier
+    'LiveSession',      // → Anchor
+    // Reference tables
+    'Supplier', 'EmployeeRole', 'RolePermission',
     'Anchor', 'User', 'Employee', 'Permission', 'Role',
   ];
 
   for (const table of clearOrder) {
-    await knex(table).del();
+    try {
+      await knex(table).del();
+    } catch {
+      // Table may not exist (e.g. migration 002/003 not run) — skip
+    }
   }
 
   const passwordHash = bcrypt.hashSync('123456', 10);
   await insertBatches(knex, 'Role', data.roles);
   await insertBatches(knex, 'Permission', data.permissions);
-  await insertBatches(knex, 'RolePermission', data.roles.flatMap((role) => (
-    data.permissions.map((permission, index) => ({
-      relation_id: `${role.role_id}_${pad(index + 1, 2)}`,
+  // Permission matrix: 管理层(16) / 运营(16) / 采购(5) / 仓储(5) / 主播(7) / 管理员(20)
+  // Indices: 0=看板查看 1=商品管理 2=主播管理 3=选品分析 4=采购管理 5=库存管理
+  //          6=直播监控 7=脚本管理 8=数据分析 9=售后管理 10=报告查看 11=系统设置
+  //          12=直播场次管理 13=采购建议查看 14=主播绩效查看 15=商品表现查看
+  //          16=接口日志查看 17=AI脚本生成 18=AI弹幕分析 19=数字顾问报告
+  const ROLE_PERM_MAP: Record<string, number[]> = {
+    ROLE001: [0,1,2,3,6,7,8,9,10,12,13,14,15,17,18,19],                           // 管理层 — 16
+    ROLE002: [0,1,2,3,6,7,8,9,10,12,13,14,15,17,18,19],                           // 运营人员 — 16
+    ROLE003: [0,4,10,13,15],                                                       // 采购人员 — 5
+    ROLE004: [0,5,10,13,15],                                                       // 仓储人员 — 5
+    ROLE005: [0,6,7,10,14,17,18],                                                  // 主播 — 7
+    ROLE006: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],                 // 系统管理员 — 20
+  };
+  await insertBatches(knex, 'RolePermission', data.roles.flatMap((role) => {
+    const indices = ROLE_PERM_MAP[role.role_id];
+    return indices.map((idx) => ({
+      relation_id: `${role.role_id}_${pad(idx + 1, 2)}`,
       role_id: role.role_id,
-      permission_id: permission.permission_id,
-    }))
-  )));
+      permission_id: data.permissions[idx].permission_id,
+    }));
+  }));
   await insertBatches(knex, 'Employee', data.employees.map((employee, index) => ({
     employee_id: employee.employee_id,
     employee_name: employee.employee_name,
@@ -445,6 +478,7 @@ export async function seedAcceptanceData(knex: Knex) {
     status: '在职',
     join_date: '2024-01-01',
     password_hash: passwordHash,
+    ...(employee.anchor_id ? { anchor_id: employee.anchor_id } : {}),
   })));
   await insertBatches(knex, 'EmployeeRole', data.employees.map((employee, index) => ({
     relation_id: id('ER', index + 1),

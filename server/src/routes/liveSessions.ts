@@ -1,19 +1,31 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import knex from '../db/knex';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, getAnchorFilter, canAccessAnchor, ROLES } from '../middleware/auth';
 import { addSSEClient, getSimulator, removeSSEClient, startSimulation, stopSimulation } from '../services/liveSimulator';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.ADMIN));
+
+/** Check anchor ownership for a live session; returns 403 if anchor user tries to access another's session */
+async function checkSessionAccess(req: Request, liveId: string, res: Response) {
+  const session = await knex('LiveSession').where('live_id', liveId).first();
+  if (!session) { res.status(404).json({ message: '\u76f4\u64ad\u573a\u6b21\u4e0d\u5b58\u5728' }); return null; }
+  if (!canAccessAnchor(req, session.anchor_id)) {
+    res.status(403).json({ message: '\u65e0\u6743\u8bbf\u95ee\u5176\u4ed6\u4e3b\u64ad\u7684\u76f4\u64ad\u573a\u6b21' }); return null;
+  }
+  return session;
+}
 
 // SSE stream endpoint (must be before /:id)
 router.get('/stream/:id', async (req: Request, res: Response) => {
   try {
     const liveId = req.params.id;
+    const session = await checkSessionAccess(req, liveId, res);
+    if (!session) return;
     if (!getSimulator(liveId)) {
-      const session = await knex('LiveSession').where('live_id', liveId).first();
-      if (session?.live_status === '\u8fdb\u884c\u4e2d') {
+      if (session.live_status === '\u8fdb\u884c\u4e2d') {
         await startSimulation(liveId, { preloadSeconds: 120, preserveStartTime: true });
       }
     }
@@ -44,11 +56,13 @@ router.get('/', async (req: Request, res: Response) => {
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const status = req.query.status as string || '';
     const search = req.query.search as string || '';
+    const scope = getAnchorFilter(req);
 
     let query = knex('LiveSession')
       .join('Anchor', 'LiveSession.anchor_id', 'Anchor.anchor_id')
       .select('LiveSession.*', 'Anchor.anchor_name');
 
+    if (scope.anchor_id) query = query.where('LiveSession.anchor_id', scope.anchor_id);
     if (status) query = query.where('LiveSession.live_status', status);
     if (search) {
       query = query.where(function () {
@@ -91,12 +105,14 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/live-sessions/:id
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const session = await knex('LiveSession')
+    const session = await checkSessionAccess(req, req.params.id, res);
+    if (!session) return;
+
+    const full = await knex('LiveSession')
       .join('Anchor', 'LiveSession.anchor_id', 'Anchor.anchor_id')
       .select('LiveSession.*', 'Anchor.anchor_name')
       .where('LiveSession.live_id', req.params.id)
       .first();
-    if (!session) return res.status(404).json({ message: '直播场次不存在' });
 
     // Get products for this session
     const products = await knex('ProductPerformance')
@@ -104,7 +120,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       .where('ProductPerformance.live_id', req.params.id)
       .select('Product.*', 'ProductPerformance.*');
 
-    return res.json({ ...session, products });
+    return res.json({ ...full, products });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }
@@ -113,12 +129,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/live-sessions
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const scope = getAnchorFilter(req);
+    const body = { ...req.body };
+    // Force anchor's own anchor_id
+    if (scope.anchor_id) body.anchor_id = scope.anchor_id;
     const id = uuid().replace(/-/g, '').substring(0, 16);
     const session = {
       live_id: id,
-      ...req.body,
-      start_time: req.body.start_time ? new Date(req.body.start_time) : null,
-      live_status: req.body.live_status || '待安排',
+      ...body,
+      start_time: body.start_time ? new Date(body.start_time) : null,
+      live_status: body.live_status || '待安排',
     };
     await knex('LiveSession').insert(session);
     return res.status(201).json(session);
@@ -130,11 +150,15 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT /api/live-sessions/:id
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const session = await checkSessionAccess(req, req.params.id, res);
+    if (!session) return;
+    const scope = getAnchorFilter(req);
     const update = { ...req.body };
     if (update.start_time) update.start_time = new Date(update.start_time);
+    if (scope.anchor_id) update.anchor_id = scope.anchor_id;
     await knex('LiveSession').where('live_id', req.params.id).update(update);
-    const session = await knex('LiveSession').where('live_id', req.params.id).first();
-    return res.json(session);
+    const updated = await knex('LiveSession').where('live_id', req.params.id).first();
+    return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }
@@ -143,6 +167,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 // POST /api/live-sessions/:id/simulate/start
 router.post('/:id/simulate/start', async (req: Request, res: Response) => {
   try {
+    const session = await checkSessionAccess(req, req.params.id, res);
+    if (!session) return;
     await startSimulation(req.params.id, { preloadSeconds: 0, preserveStartTime: false });
     return res.json({ success: true, message: '直播模拟已启动' });
   } catch (err: any) {
@@ -153,6 +179,8 @@ router.post('/:id/simulate/start', async (req: Request, res: Response) => {
 // POST /api/live-sessions/:id/simulate/stop
 router.post('/:id/simulate/stop', async (req: Request, res: Response) => {
   try {
+    const session = await checkSessionAccess(req, req.params.id, res);
+    if (!session) return;
     await stopSimulation(req.params.id);
     return res.json({ success: true, message: '直播模拟已停止' });
   } catch (err: any) {

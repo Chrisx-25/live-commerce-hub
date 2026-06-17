@@ -142,28 +142,28 @@ const riskSummary = computed(() => {
 onMounted(() => load())
 
 const columns = [
-  { key: 'product_name', label: '商品名称' },
-  { key: 'sku_name', label: 'SKU' },
-  { key: 'warehouse_name', label: '仓库' },
-  { key: 'current_stock', label: '当前库存' },
-  { key: 'predicted_sales_30d', label: '30天预测' },
-  { key: 'upcoming_live_demand', label: '直播需求' },
-  { key: 'inbound_purchase_quantity', label: '在途' },
-  { key: 'suggested_quantity', label: '建议采购' },
-  { key: 'stock_risk_level', label: '风险' },
-  { key: 'actions', label: '操作', sortable: false },
+  { key: 'product_name', label: '商品名称', width: '20%' },
+  { key: 'sku_name', label: 'SKU', width: '16%' },
+  { key: 'warehouse_name', label: '仓库', width: '10%' },
+  { key: 'current_stock', label: '当前库存', width: '8%' },
+  { key: 'predicted_sales_30d', label: '30天预测', width: '8%' },
+  { key: 'upcoming_live_demand', label: '直播需求', width: '8%' },
+  { key: 'inbound_purchase_quantity', label: '在途', width: '6%' },
+  { key: 'suggested_quantity', label: '建议采购', width: '8%' },
+  { key: 'stock_risk_level', label: '风险', width: '6%' },
+  { key: 'actions', label: '操作', sortable: false, width: '10%' },
 ]
 
 const alertColumns = [
-  { key: 'product_name', label: '商品' },
-  { key: 'sku_name', label: 'SKU' },
-  { key: 'warehouse_name', label: '仓库' },
-  { key: 'current_stock', label: '当前库存' },
-  { key: 'safety_stock', label: '安全库存' },
-  { key: 'reorder_point', label: '动态补货点' },
-  { key: 'suggested_quantity', label: '建议采购' },
-  { key: 'stock_risk_level', label: '风险' },
-  { key: 'actions', label: '操作', sortable: false },
+  { key: 'product_name', label: '商品', width: '20%' },
+  { key: 'sku_name', label: 'SKU', width: '16%' },
+  { key: 'warehouse_name', label: '仓库', width: '10%' },
+  { key: 'current_stock', label: '当前库存', width: '8%' },
+  { key: 'safety_stock', label: '安全库存', width: '8%' },
+  { key: 'reorder_point', label: '动态补货点', width: '10%' },
+  { key: 'suggested_quantity', label: '建议采购', width: '8%' },
+  { key: 'stock_risk_level', label: '风险', width: '6%' },
+  { key: 'actions', label: '操作', sortable: false, width: '10%' },
 ]
 </script>
 

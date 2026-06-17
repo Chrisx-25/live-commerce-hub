@@ -178,16 +178,16 @@ const chartOptions = computed(() => ({
       position: 'top' as const,
       align: 'end' as const,
       labels: {
-        boxWidth: 12, boxHeight: 3, padding: 20,
-        font: { family: "'Noto Sans SC', sans-serif", size: 12 },
+        boxWidth: 10, boxHeight: 3, padding: 16,
+        font: { family: "'Noto Sans SC', sans-serif", size: 11 },
         color: '#3A3A3A',
       },
     },
     tooltip: {
       backgroundColor: '#111111',
-      titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
-      bodyFont: { family: "'Noto Sans SC', sans-serif", size: 13 },
-      padding: 12, cornerRadius: 2,
+      titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+      bodyFont: { family: "'Noto Sans SC', sans-serif", size: 12 },
+      padding: 10, cornerRadius: 2,
     },
   },
   scales: {
@@ -244,17 +244,17 @@ const categoryChartOptions = computed(() => ({
     legend: {
       position: 'right' as const,
       labels: {
-        boxWidth: 10, boxHeight: 10, padding: 14,
-        font: { family: "'Noto Sans SC', sans-serif", size: 12 },
+        boxWidth: 8, boxHeight: 8, padding: 10,
+        font: { family: "'Noto Sans SC', sans-serif", size: 11 },
         color: '#3A3A3A',
         usePointStyle: true,
       },
     },
     tooltip: {
       backgroundColor: '#111111',
-      titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
-      bodyFont: { family: "'Noto Sans SC', sans-serif", size: 13 },
-      padding: 12, cornerRadius: 2,
+      titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+      bodyFont: { family: "'Noto Sans SC', sans-serif", size: 12 },
+      padding: 10, cornerRadius: 2,
       callbacks: {
         label: (ctx: any) => {
           const pct = categoryTotalGmv.value ? ((ctx.raw / categoryTotalGmv.value) * 100).toFixed(1) : '0'
@@ -280,7 +280,17 @@ const periodText = computed(() => {
   return `${summary.value.period.startDate} 至 ${summary.value.period.endDate}`
 })
 
+const isAnchorScope = computed(() => summary.value?.scope?.type === 'anchor')
+const scopeAnchorName = computed(() => summary.value?.scope?.anchorName || '')
+
+const remindSent = ref(false)
+
 function goInventory() {
+  if (isAnchorScope.value) {
+    remindSent.value = true
+    setTimeout(() => { remindSent.value = false }, 2500)
+    return
+  }
   router.push('/inventory')
 }
 
@@ -290,6 +300,13 @@ const canApplyCustom = computed(() => customStart.value && customEnd.value)
 <template>
   <PageHeader title="运营数据总览" subtitle="直播电商业务全景" />
   <div class="page-body">
+    <!-- Anchor identity banner -->
+    <div class="anchor-banner" v-if="isAnchorScope">
+      <span class="anchor-badge">主播专属</span>
+      <span class="anchor-banner-name">{{ scopeAnchorName }}</span>
+      <span class="anchor-banner-desc">以下数据为您的个人直播运营数据，TOP5 主播排名为全公司范围</span>
+    </div>
+
     <!-- Period Selector -->
     <div class="period-bar" v-if="summary">
       <div class="period-mode-row">
@@ -323,8 +340,17 @@ const canApplyCustom = computed(() => customStart.value && customEnd.value)
       <KpiCard label="总订单数" :value="formatNumber(summary.totalOrders)" :sub-value="'日均 ' + formatNumber(summary.dailyAvgOrders) + ' 单'" :change="`${summary.ordersChange > 0 ? '+' : ''}${summary.ordersChange}% 环比`" :change-type="summary.ordersChange >= 0 ? 'up' : 'down'" />
       <KpiCard label="平均转化率" :value="summary.avgConversionRate?.toFixed(1) + '%'" :change="`${summary.conversionChange > 0 ? '+' : ''}${summary.conversionChange}% 环比`" :change-type="summary.conversionChange >= 0 ? 'up' : 'down'" />
       <div class="kpi-card-wrap">
-        <KpiCard label="库存告警 SKU" :value="summary.stockAlertCount" change="需及时补货" change-type="neutral" />
-        <button class="btn small primary kpi-card-btn" @click="goInventory">查看库存 →</button>
+        <KpiCard :label="isAnchorScope ? '直播商品库存告警' : '库存告警 SKU'" :value="summary.stockAlertCount" :change="isAnchorScope ? '即将直播商品' : '需及时补货'" change-type="neutral" />
+        <button
+          class="btn small kpi-card-btn"
+          :class="remindSent ? 'success' : 'primary'"
+          @click="goInventory"
+        >
+          <template v-if="isAnchorScope">
+            {{ remindSent ? '✓ 已提醒' : '提醒补货' }}
+          </template>
+          <template v-else>查看库存 →</template>
+        </button>
       </div>
     </div>
 
@@ -390,7 +416,7 @@ const canApplyCustom = computed(() => customStart.value && customEnd.value)
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">主播排名 TOP5</span>
+          <span class="card-title">主播排名 TOP5 <span v-if="isAnchorScope" class="scope-tag">全公司</span></span>
           <span class="card-extra">GMV 贡献</span>
         </div>
         <div class="card-divider"></div>
@@ -422,67 +448,68 @@ const canApplyCustom = computed(() => customStart.value && customEnd.value)
 </template>
 
 <style scoped>
-/* ===== Period Selector ===== */
-.period-bar { margin-bottom: var(--space-lg); }
+/* ===== Density-first dashboard — fits on one screen @ 1080p ===== */
 
-.period-mode-row {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
+/* ----- Page-header compaction (override global) ----- */
+:deep(.page-header) { padding: 20px 48px 0; }
+:deep(.page-title) { font-size: 28px; }
+:deep(.page-subtitle) { font-size: 12px; margin-top: 3px; }
+:deep(.page-divider) { margin-top: 12px; margin-bottom: 16px; }
 
-.mode-toggle {
-  padding: 5px 0 3px;
-  border: none; border-bottom: 2px solid transparent;
-  background: none;
-  font-family: var(--font-sans); font-size: 13px; font-weight: 500;
-  color: var(--ink-soft); cursor: pointer;
-  transition: all var(--duration-fast);
+/* override page-body bottom padding */
+.page-body { padding-bottom: 20px; }
+
+/* ----- Anchor identity banner (compact) ----- */
+.anchor-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(188, 125, 43, 0.08) 0%, rgba(188, 125, 43, 0.03) 100%);
+  border: 1px solid rgba(188, 125, 43, 0.25);
+  border-left: 3px solid var(--gold);
+  font-size: 12px;
 }
+.anchor-badge { display: inline-block; padding: 2px 8px; background: var(--gold); color: #fff; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; }
+.anchor-banner-name { font-weight: 700; color: var(--ink); font-size: 13px; }
+.anchor-banner-desc { color: var(--ink-soft); font-size: 11px; margin-left: auto; }
+.scope-tag { display: inline-block; padding: 1px 6px; background: var(--paper-dark); border: 1px solid var(--rule); font-family: var(--font-mono); font-size: 9px; font-weight: 500; color: var(--ink-soft); vertical-align: middle; margin-left: 4px; }
+
+/* ----- Period Selector (compact) ----- */
+.period-bar { margin-bottom: 10px; }
+.period-mode-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mode-toggle { padding: 3px 0 2px; border: none; border-bottom: 2px solid transparent; background: none; font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--ink-soft); cursor: pointer; transition: all var(--duration-fast); }
 .mode-toggle:hover { color: var(--ink); }
-.mode-toggle.active {
-  color: var(--ink); border-bottom-color: var(--vermillion); font-weight: 600;
-}
-
+.mode-toggle.active { color: var(--ink); border-bottom-color: var(--vermillion); font-weight: 600; }
 .preset-chips { display: flex; gap: 0; border: 1px solid var(--rule); overflow: hidden; }
-.period-chip {
-  padding: 6px 18px; border: none; border-right: 1px solid var(--rule);
-  background: var(--paper); font-family: var(--font-mono); font-size: 12px;
-  color: var(--ink); cursor: pointer; transition: all var(--duration-fast);
-}
+.period-chip { padding: 4px 14px; border: none; border-right: 1px solid var(--rule); background: var(--paper); font-family: var(--font-mono); font-size: 11px; color: var(--ink); cursor: pointer; transition: all var(--duration-fast); }
 .period-chip:last-child { border-right: none; }
 .period-chip:hover { background: var(--paper-dark); }
 .period-chip.active { background: var(--vermillion-soft); color: var(--vermillion); font-weight: 600; }
-
-.custom-dates { display: flex; align-items: center; gap: 10px; }
-.date-input {
-  padding: 5px 10px; border: 1px solid var(--rule); background: var(--paper);
-  font-family: var(--font-mono); font-size: 12px; color: var(--ink); width: 148px;
-  transition: border-color var(--duration-fast);
-}
+.custom-dates { display: flex; align-items: center; gap: 8px; }
+.date-input { padding: 4px 8px; border: 1px solid var(--rule); background: var(--paper); font-family: var(--font-mono); font-size: 11px; color: var(--ink); width: 134px; transition: border-color var(--duration-fast); }
 .date-input:focus { outline: none; border-color: var(--vermillion); }
 .date-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
-.date-sep { font-size: 13px; color: var(--ink-soft); }
+.date-sep { font-size: 12px; color: var(--ink-soft); }
+.period-range-text { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 
-.period-range-text {
-  margin-left: auto; font-family: var(--font-mono); font-size: 12px;
-  color: var(--ink-soft); white-space: nowrap;
-}
-
-/* ===== KPI card wrapper ===== */
+/* ----- KPI cards (compact) ----- */
+.kpi-row { gap: 14px; margin-bottom: 14px; }
+.kpi-row :deep(.kpi-card) { padding: 14px 18px 14px; }
+.kpi-row :deep(.kpi-label) { font-size: 10px; margin-bottom: 4px; letter-spacing: 0.06em; }
+.kpi-row :deep(.kpi-value) { font-size: 30px; }
+.kpi-row :deep(.kpi-sub) { font-size: 11px; margin-top: 2px; }
+.kpi-row :deep(.kpi-change) { font-size: 10px; margin-top: 3px; }
 .kpi-card-wrap { position: relative; height: 100%; }
 .kpi-card-wrap :deep(.kpi-card) { height: 100%; }
-.kpi-card-btn { position: absolute; bottom: 12px; right: 16px; font-size: 11px; }
+.kpi-card-btn { position: absolute; bottom: 8px; right: 12px; font-size: 10px; transition: all var(--duration-fast); }
+.kpi-card-btn.success { background: var(--sage); color: #fff; border-color: var(--sage); pointer-events: none; }
 
-/* ===== Charts layout ===== */
-.charts-row {
-  display: grid; grid-template-columns: 3fr 2fr; gap: var(--space-lg);
-  margin-bottom: var(--space-lg);
-}
-.rankings-row {
-  display: grid; grid-template-columns: 7fr 4fr; gap: var(--space-lg);
-  margin-bottom: var(--space-xl);
-}
+/* ----- Charts layout (compact) ----- */
+.charts-row { display: grid; grid-template-columns: 3fr 2fr; gap: 14px; margin-bottom: 14px; }
+.charts-row .card-body { padding: 10px 20px 14px; }
+.rankings-row { display: grid; grid-template-columns: 7fr 4fr; gap: 14px; margin-bottom: 0; }
+.rankings-row .card-body { padding: 8px 20px 14px; }
 
-/* ===== Skeleton ===== */
+/* ----- Skeleton ----- */
 .skeleton { animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .skel-line { height: 14px; background: var(--rule-soft); border-radius: 2px; }
@@ -492,70 +519,42 @@ const canApplyCustom = computed(() => customStart.value && customEnd.value)
 .skel-line.h-10 { height: 38px; margin: 8px 0; }
 .skel-line.mt-2 { margin-top: 8px; }
 
-/* ===== Chart ===== */
-.chart-wrap { width: 100%; height: 280px; position: relative; }
+/* ----- Charts ----- */
+.chart-wrap { width: 100%; height: 185px; position: relative; }
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
-.donut-wrap { width: 100%; height: 280px; position: relative; display: flex; justify-content: center; }
+.donut-wrap { width: 100%; height: 185px; position: relative; display: flex; justify-content: center; }
 .donut-wrap canvas { max-width: 100% !important; max-height: 100% !important; }
-.empty-hint { padding: 40px 20px; text-align: center; color: var(--ink-soft); font-size: 13px; }
+.empty-hint { padding: 28px 20px; text-align: center; color: var(--ink-soft); font-size: 12px; }
 
-/* ===== TOP10 Products ===== */
+/* ----- TOP10 Products (compact) ----- */
 .product-list { display: flex; flex-direction: column; }
-.product-item {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 9px 0; border-bottom: 1px solid var(--rule-soft);
-}
+.product-item { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--rule-soft); }
 .product-item:last-child { border-bottom: none; padding-bottom: 0; }
 .product-item:first-child { padding-top: 0; }
-
-.product-rank {
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
-  color: var(--ink-soft); background: var(--paper-dark); border-radius: 2px;
-  flex-shrink: 0; margin-top: 1px;
-}
+.product-rank { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--ink-soft); background: var(--paper-dark); border-radius: 2px; flex-shrink: 0; margin-top: 1px; }
 .product-rank.t1 { background: var(--vermillion); color: #fff; }
 .product-rank.t2 { background: var(--ink-mid); color: #fff; }
 .product-rank.t3 { background: var(--gold); color: #fff; }
-
 .product-info { flex: 1; min-width: 0; }
-.product-name-row {
-  display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
-}
-.product-name {
-  font-size: 13px; font-weight: 600; color: var(--ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.product-gmv {
-  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
-  color: var(--ink); white-space: nowrap; flex-shrink: 0;
-}
-.product-meta {
-  display: flex; align-items: center; gap: 8px; margin-top: 3px;
-}
-.cat-tag {
-  display: inline-block; padding: 1px 8px;
-  font-family: var(--font-mono); font-size: 10px; color: var(--ink-soft);
-  border: 1px solid var(--rule); background: var(--paper);
-}
-.qty-text { font-size: 11px; color: var(--ink-soft); }
-.product-track {
-  height: 5px; margin-top: 6px; background: rgba(17, 17, 17, 0.06); overflow: hidden;
-}
-.product-track i {
-  display: block; height: 100%; background: var(--ink-mid);
-  transition: width var(--duration-normal);
-}
+.product-name-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.product-name { font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-gmv { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
+.product-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.cat-tag { display: inline-block; padding: 1px 6px; font-family: var(--font-mono); font-size: 9px; color: var(--ink-soft); border: 1px solid var(--rule); background: var(--paper); }
+.qty-text { font-size: 10px; color: var(--ink-soft); }
+.product-track { height: 4px; margin-top: 4px; background: rgba(17, 17, 17, 0.06); overflow: hidden; }
+.product-track i { display: block; height: 100%; background: var(--ink-mid); transition: width var(--duration-normal); }
 
-/* ===== Anchor ranking ===== */
+/* ----- Anchor ranking (compact) ----- */
 .ranked-anchor { align-items: flex-start; }
-.anchor-name-row {
-  display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
-}
-.rank-track {
-  height: 7px; margin-top: 8px; background: rgba(17, 17, 17, 0.08); overflow: hidden;
-}
+.anchor-name-row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.rank-track { height: 5px; margin-top: 5px; background: rgba(17, 17, 17, 0.08); overflow: hidden; }
 .rank-track i { display: block; height: 100%; background: var(--vermillion); }
+
+/* override global anchor-item spacing */
+.anchor-item { padding: 7px 0; }
+.anchor-item:first-child { padding-top: 0; }
+.anchor-item:last-child { padding-bottom: 0; }
 
 @media (max-width: 1100px) {
   .charts-row { grid-template-columns: 1fr; }

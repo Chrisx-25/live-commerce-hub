@@ -88,13 +88,13 @@ function levelClass(level: string) {
 onMounted(() => load())
 
 const columns = [
-  { key: 'nickname', label: '用户' },
-  { key: 'aftersale_type', label: '售后类型' },
-  { key: 'problem_description', label: '问题描述' },
-  { key: 'refund_amount', label: '退款金额' },
-  { key: 'complaint_level', label: '投诉等级' },
-  { key: 'process_status', label: '处理状态' },
-  { key: 'create_time', label: '创建时间' },
+  { key: 'nickname', label: '用户', width: '14%' },
+  { key: 'aftersale_type', label: '售后类型', width: '10%' },
+  { key: 'problem_description', label: '问题描述', width: '22%' },
+  { key: 'refund_amount', label: '退款金额', width: '9%' },
+  { key: 'complaint_level', label: '投诉等级', width: '9%' },
+  { key: 'process_status', label: '处理状态', width: '9%' },
+  { key: 'create_time', label: '创建时间', width: '14%' },
   { key: 'actions', label: '操作', sortable: false },
 ]
 </script>

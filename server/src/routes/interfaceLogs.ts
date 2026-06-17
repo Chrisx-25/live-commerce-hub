@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import knex from '../db/knex';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, ROLES } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.ADMIN));
 
 // GET /api/interface-logs
 router.get('/', async (req: Request, res: Response) => {

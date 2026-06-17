@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import knex from '../db/knex';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, ROLES } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.PURCHASING, ROLES.WAREHOUSE, ROLES.ANCHOR, ROLES.ADMIN));
 
 // GET /api/after-sales
 router.get('/', async (req: Request, res: Response) => {

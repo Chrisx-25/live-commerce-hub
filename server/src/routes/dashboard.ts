@@ -1,9 +1,26 @@
 import { Router, Request, Response } from 'express';
 import knex from '../db/knex';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, getAnchorFilter, ALL_ROLES } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(...ALL_ROLES));
+
+/** Apply anchor scope to an Order query by joining LiveSession */
+function applyAnchorScope(query: any, anchorId: string | undefined) {
+  if (!anchorId) return query;
+  return query
+    .join('LiveSession', '[Order].live_id', 'LiveSession.live_id')
+    .where('LiveSession.anchor_id', anchorId);
+}
+
+/** Apply anchor scope to count queries (separate clone to avoid mutating the main query) */
+function applyAnchorScopeToCount(baseQuery: any, anchorId: string | undefined) {
+  if (!anchorId) return baseQuery;
+  return baseQuery
+    .join('LiveSession', '[Order].live_id', 'LiveSession.live_id')
+    .where('LiveSession.anchor_id', anchorId);
+}
 
 function dateOnly(date: Date) {
   return date.toISOString().split('T')[0];
@@ -21,7 +38,12 @@ function changeRate(current: number, previous: number) {
 }
 
 async function getOrderReferenceDate() {
-  const maxDate = await knex('[Order]').max('order_time as max').first();
+  // Use the latest non-future order date as reference.
+  // LiveSimulator creates today-dated orders; scheduled sessions may have future orders.
+  const maxDate = await knex('[Order]')
+    .max('order_time as max')
+    .where('order_time', '<=', knex.fn.now())
+    .first();
   return maxDate?.max ? new Date(maxDate.max) : new Date();
 }
 
@@ -83,19 +105,20 @@ async function resolveDateRange(req: Request) {
 router.get('/summary', async (req: Request, res: Response) => {
   try {
     const range = await resolveDateRange(req);
+    const scope = getAnchorFilter(req);
 
-    const currentOrders = await knex('[Order]')
-      .where('order_time', '>=', range.currentStart)
-      .where('order_time', '<', range.currentEnd)
-      .sum('order_amount as total')
-      .count('* as count')
-      .first();
-    const previousOrders = await knex('[Order]')
-      .where('order_time', '>=', range.previousStart)
-      .where('order_time', '<', range.previousEnd)
-      .sum('order_amount as total')
-      .count('* as count')
-      .first();
+    const currentOrders = await applyAnchorScope(
+      knex('[Order]')
+        .where('order_time', '>=', range.currentStart)
+        .where('order_time', '<', range.currentEnd),
+      scope.anchor_id
+    ).sum('order_amount as total').count('* as count').first();
+    const previousOrders = await applyAnchorScope(
+      knex('[Order]')
+        .where('order_time', '>=', range.previousStart)
+        .where('order_time', '<', range.previousEnd),
+      scope.anchor_id
+    ).sum('order_amount as total').count('* as count').first();
 
     // AnchorPerformance may have a different time span than Orders.
     // Try period-specific query first; fall back to all-time if empty.
@@ -126,11 +149,35 @@ router.get('/summary', async (req: Request, res: Response) => {
       totalProducts = await knex('Product').whereNot('product_status', '新品').count('* as count').first();
     }
 
-    const stockAlerts = await knex('Inventory').where('current_stock', '<=', knex.raw('safety_stock')).count('* as count').first();
+    // Stock alerts: for anchors, count alerts for products in their own sessions
+    let stockAlerts: any;
+    if (scope.anchor_id) {
+      stockAlerts = await knex('Inventory')
+        .join('SKU', 'Inventory.sku_id', 'SKU.sku_id')
+        .join('ProductPerformance', 'SKU.product_id', 'ProductPerformance.product_id')
+        .join('LiveSession', 'ProductPerformance.live_id', 'LiveSession.live_id')
+        .where('LiveSession.anchor_id', scope.anchor_id)
+        .where('Inventory.current_stock', '<=', knex.raw('Inventory.safety_stock'))
+        .countDistinct('Inventory.inventory_id as count')
+        .first();
+    } else {
+      stockAlerts = await knex('Inventory').where('current_stock', '<=', knex.raw('safety_stock')).count('* as count').first();
+    }
 
     const totalGmv = Number(currentOrders?.total) || 0;
     const totalOrders = Number(currentOrders?.count) || 0;
     const avgConversionRate = Number(avgConv?.avg) || 0;
+
+    // Anchor scope info
+    let scopeInfo: { type: 'anchor'; anchorName: string; anchorId: string } | { type: 'global' } = { type: 'global' };
+    if (scope.anchor_id) {
+      const anchor = await knex('Anchor').where('anchor_id', scope.anchor_id).first();
+      scopeInfo = {
+        type: 'anchor',
+        anchorName: anchor?.anchor_name || '',
+        anchorId: scope.anchor_id,
+      };
+    }
 
     return res.json({
       totalGmv,
@@ -143,6 +190,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       gmvChange: changeRate(totalGmv, Number(previousOrders?.total) || 0),
       ordersChange: changeRate(totalOrders, Number(previousOrders?.count) || 0),
       conversionChange: changeRate(avgConversionRate, Number(previousAvgConv?.avg) || 0),
+      scope: scopeInfo,
       period: {
         label: range.label,
         startDate: dateOnly(range.currentStart),
@@ -160,28 +208,35 @@ router.get('/summary', async (req: Request, res: Response) => {
 router.get('/trend', async (req: Request, res: Response) => {
   try {
     const range = await resolveDateRange(req);
+    const scope = getAnchorFilter(req);
 
-    const data = await knex('[Order]')
-      .select(knex.raw('CAST(order_time AS DATE) as date'))
-      .sum('order_amount as gmv')
-      .count('* as orders')
-      .where('order_time', '>=', range.currentStart)
-      .where('order_time', '<', range.currentEnd)
-      .groupBy(knex.raw('CAST(order_time AS DATE)'))
-      .orderBy('date', 'asc');
+    const data = await applyAnchorScope(
+      knex('[Order]')
+        .select(knex.raw('CAST([Order].order_time AS DATE) as date'))
+        .sum('[Order].order_amount as gmv')
+        .count('* as orders')
+        .where('[Order].order_time', '>=', range.currentStart)
+        .where('[Order].order_time', '<', range.currentEnd)
+        .groupBy(knex.raw('CAST([Order].order_time AS DATE)')),
+      scope.anchor_id
+    ).orderBy('date', 'asc');
 
     // Zero-fill missing dates so the chart renders a continuous line
+    // Use local date formatting to avoid timezone boundary mismatches
+    const fmtDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const dataMap = new Map<string, { gmv: number; orders: number }>();
     for (const row of data) {
-      const d = row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date).split('T')[0];
+      const d = row.date instanceof Date ? fmtDate(new Date(row.date)) : String(row.date).split('T')[0];
       dataMap.set(d, { gmv: Number(row.gmv) || 0, orders: Number(row.orders) || 0 });
     }
 
     const filled: { date: string; gmv: number; orders: number }[] = [];
-    const cursor = new Date(range.currentStart);
-    const end = new Date(range.currentEnd.getTime() - 1); // back off the +1ms
-    while (cursor <= end) {
-      const key = cursor.toISOString().split('T')[0];
+    // Normalize to local midnight to avoid UTC day boundary
+    const cursor = new Date(range.currentStart.getFullYear(), range.currentStart.getMonth(), range.currentStart.getDate());
+    const endDay = new Date(range.currentEnd.getFullYear(), range.currentEnd.getMonth(), range.currentEnd.getDate());
+    endDay.setDate(endDay.getDate() - 1); // currentEnd is exclusive (+1ms), step back to last actual day
+    while (cursor <= endDay) {
+      const key = fmtDate(cursor);
       const entry = dataMap.get(key);
       filled.push({ date: key, gmv: entry?.gmv || 0, orders: entry?.orders || 0 });
       cursor.setDate(cursor.getDate() + 1);
@@ -193,14 +248,16 @@ router.get('/trend', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/dashboard/top-anchors?limit=5
-// Always ranks by all-time total_sales — anchor ranking reflects cumulative contribution
+// GET /api/dashboard/top-anchors?limit=5&days=30  OR  ?startDate=...&endDate=...
+// Note: intentionally NOT anchor-scoped — this is a company-wide ranking for comparison
 router.get('/top-anchors', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 5;
+    const range = await resolveDateRange(req);
 
     const data = await knex('Anchor')
       .join('LiveSession', 'Anchor.anchor_id', 'LiveSession.anchor_id')
+      .join('[Order]', 'LiveSession.live_id', '[Order].live_id')
       .select(
         'Anchor.anchor_id',
         'Anchor.anchor_name',
@@ -208,8 +265,9 @@ router.get('/top-anchors', async (req: Request, res: Response) => {
         'Anchor.anchor_level',
         'Anchor.fan_count'
       )
-      .sum('LiveSession.total_sales as total_gmv')
-      .where('LiveSession.live_status', '已结束')
+      .sum('[Order].order_amount as total_gmv')
+      .where('[Order].order_time', '>=', range.currentStart)
+      .where('[Order].order_time', '<', range.currentEnd)
       .groupBy('Anchor.anchor_id', 'Anchor.anchor_name', 'Anchor.specialization', 'Anchor.anchor_level', 'Anchor.fan_count')
       .orderBy('total_gmv', 'desc')
       .limit(limit);
@@ -224,17 +282,20 @@ router.get('/top-anchors', async (req: Request, res: Response) => {
 router.get('/category-gmv', async (req: Request, res: Response) => {
   try {
     const range = await resolveDateRange(req);
+    const scope = getAnchorFilter(req);
 
-    const data = await knex('[Order]')
+    const base = knex('[Order]')
       .join('SKU', '[Order].sku_id', 'SKU.sku_id')
-      .join('Product', 'SKU.product_id', 'Product.product_id')
-      .select('Product.category')
-      .sum('[Order].order_amount as gmv')
-      .count('* as order_count')
-      .where('[Order].order_time', '>=', range.currentStart)
-      .where('[Order].order_time', '<', range.currentEnd)
-      .groupBy('Product.category')
-      .orderBy('gmv', 'desc');
+      .join('Product', 'SKU.product_id', 'Product.product_id');
+    const data = await applyAnchorScope(
+      base.select('Product.category')
+        .sum('[Order].order_amount as gmv')
+        .count('* as order_count')
+        .where('[Order].order_time', '>=', range.currentStart)
+        .where('[Order].order_time', '<', range.currentEnd)
+        .groupBy('Product.category'),
+      scope.anchor_id
+    ).orderBy('gmv', 'desc');
 
     return res.json(data.map((r: any) => ({
       category: r.category,
@@ -251,23 +312,25 @@ router.get('/top-products', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const range = await resolveDateRange(req);
+    const scope = getAnchorFilter(req);
 
-    const data = await knex('[Order]')
+    const base = knex('[Order]')
       .join('SKU', '[Order].sku_id', 'SKU.sku_id')
-      .join('Product', 'SKU.product_id', 'Product.product_id')
-      .select(
+      .join('Product', 'SKU.product_id', 'Product.product_id');
+    const data = await applyAnchorScope(
+      base.select(
         'Product.product_id',
         'Product.product_name',
         'Product.category',
         'Product.sale_price'
       )
-      .sum('[Order].order_amount as gmv')
-      .sum('[Order].order_quantity as quantity')
-      .where('[Order].order_time', '>=', range.currentStart)
-      .where('[Order].order_time', '<', range.currentEnd)
-      .groupBy('Product.product_id', 'Product.product_name', 'Product.category', 'Product.sale_price')
-      .orderBy('gmv', 'desc')
-      .limit(limit);
+        .sum('[Order].order_amount as gmv')
+        .sum('[Order].order_quantity as quantity')
+        .where('[Order].order_time', '>=', range.currentStart)
+        .where('[Order].order_time', '<', range.currentEnd)
+        .groupBy('Product.product_id', 'Product.product_name', 'Product.category', 'Product.sale_price'),
+      scope.anchor_id
+    ).orderBy('gmv', 'desc').limit(limit);
 
     return res.json(data.map((r: any) => ({
       productId: r.product_id,

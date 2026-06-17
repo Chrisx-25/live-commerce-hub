@@ -73,7 +73,8 @@ function goPlanning() {
 }
 
 function goSession(session: LiveSession) {
-  if (session.live_status === '待安排') {
+  // Route all plannable (unstarted) sessions to the planning page
+  if (session.live_status === '待安排' || session.live_status === '已排期') {
     router.push(`/live-planning?liveId=${session.live_id}`)
     return
   }
@@ -111,15 +112,15 @@ function changePage(p: number) { page.value = p; load() }
 onMounted(() => { refresh() })
 
 const columns = [
-  { key: 'live_title', label: '直播标题' },
-  { key: 'anchor_name', label: '主播' },
-  { key: 'platform', label: '平台' },
-  { key: 'live_category', label: '品类' },
-  { key: 'start_time', label: '开始时间' },
-  { key: 'live_status', label: '状态' },
-  { key: 'online_peak', label: '峰值在线' },
-  { key: 'total_sales', label: '销售额' },
-  { key: 'actions', label: '操作', sortable: false },
+  { key: 'live_title', label: '直播标题', width: '24%' },
+  { key: 'anchor_name', label: '主播', width: '10%' },
+  { key: 'platform', label: '平台', width: '8%' },
+  { key: 'live_category', label: '品类', width: '8%' },
+  { key: 'start_time', label: '开始时间', width: '14%' },
+  { key: 'live_status', label: '状态', width: '8%' },
+  { key: 'online_peak', label: '峰值在线', width: '8%' },
+  { key: 'total_sales', label: '销售额', width: '8%' },
+  { key: 'actions', label: '操作', sortable: false, width: '12%' },
 ]
 
 </script>

@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import knex from '../db/knex';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, ROLES } from '../middleware/auth';
 import { buildInventoryPlans } from '../services/inventoryPlanning';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.WAREHOUSE, ROLES.ADMIN));
 
 // GET /api/inventory
 router.get('/', async (req: Request, res: Response) => {

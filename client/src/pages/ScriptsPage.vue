@@ -160,13 +160,13 @@ function changePage(p: number) { page.value = p; load() }
 onMounted(() => { load(); loadProducts() })
 
 const columns = [
-  { key: 'script_title', label: '脚本标题' },
-  { key: 'product_name', label: '商品' },
-  { key: 'script_type', label: '类型' },
-  { key: 'tags', label: '标签' },
-  { key: 'conversion_rate', label: '转化率' },
-  { key: 'recommendation_level', label: '推荐' },
-  { key: 'actions', label: '操作' },
+  { key: 'script_title', label: '脚本标题', width: '30%' },
+  { key: 'product_name', label: '商品', width: '24%' },
+  { key: 'script_type', label: '类型', width: '6%' },
+  { key: 'tags', label: '标签', width: '10%' },
+  { key: 'conversion_rate', label: '转化率', width: '6%' },
+  { key: 'recommendation_level', label: '推荐', width: '5%' },
+  { key: 'actions', label: '操作', width: '19%' },
 ]
 </script>
 
@@ -186,7 +186,8 @@ const columns = [
       </template>
       <template #cell-conversion_rate="{ value }">{{ value ? value + '%' : '-' }}</template>
       <template #cell-recommendation_level="{ value }">
-        <span :class="value === '高' ? 'level-S' : value === '中' ? 'level-A' : 'level-C'">{{ value || '-' }}</span>
+        <span v-if="value" class="rec-badge" :class="value === '高' ? 'rec-high' : value === '中' ? 'rec-mid' : 'rec-low'">{{ value }}</span>
+        <span v-else class="rec-none">-</span>
       </template>
       <template #cell-actions="{ row }">
         <button class="btn small" @click="openEdit(row)">查看/编辑</button>
@@ -324,6 +325,22 @@ const columns = [
 .script-title-cell {
   font-weight: 600;
 }
+
+/* Recommendation badges */
+.rec-badge {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.rec-high { background: var(--vermillion); color: #fff; }
+.rec-mid  { background: var(--ink); color: var(--paper); }
+.rec-low  { background: var(--ink-soft); color: var(--paper); }
+.rec-none { color: var(--ink-soft); }
 
 /* Progress bar */
 .progress-wrap {

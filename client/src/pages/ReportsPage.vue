@@ -71,12 +71,12 @@ const insightCards = computed(() => {
 onMounted(() => load())
 
 const columns = [
-  { key: 'report_title', label: '报告标题' },
-  { key: 'report_type', label: '类型' },
-  { key: 'statistical_period', label: '统计周期' },
-  { key: 'creator_name', label: '创建人' },
-  { key: 'create_time', label: '创建时间' },
-  { key: 'actions', label: '操作', sortable: false },
+  { key: 'report_title', label: '报告标题', width: '36%' },
+  { key: 'report_type', label: '类型', width: '10%' },
+  { key: 'statistical_period', label: '统计周期', width: '14%' },
+  { key: 'creator_name', label: '创建人', width: '10%' },
+  { key: 'create_time', label: '创建时间', width: '14%' },
+  { key: 'actions', label: '操作', sortable: false, width: '16%' },
 ]
 </script>
 

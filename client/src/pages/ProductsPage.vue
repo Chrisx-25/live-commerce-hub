@@ -139,15 +139,15 @@ onMounted(() => {
 })
 
 const columns = [
-  { key: 'product_name', label: '商品名称' },
-  { key: 'category', label: '分类' },
-  { key: 'brand', label: '品牌' },
-  { key: 'supplier_name', label: '供应商' },
-  { key: 'cost_price', label: '成本价' },
-  { key: 'sale_price', label: '售价' },
-  { key: 'gross_profit_rate', label: '毛利率' },
-  { key: 'product_status', label: '状态' },
-  { key: 'actions', label: '操作' },
+  { key: 'product_name', label: '商品名称', width: '23%' },
+  { key: 'category', label: '分类', width: '7%' },
+  { key: 'brand', label: '品牌', width: '16%' },
+  { key: 'supplier_name', label: '供应商', width: '16%' },
+  { key: 'cost_price', label: '成本价', width: '7%' },
+  { key: 'sale_price', label: '售价', width: '7%' },
+  { key: 'gross_profit_rate', label: '毛利率', width: '6%' },
+  { key: 'product_status', label: '状态', width: '6%' },
+  { key: 'actions', label: '操作', width: '12%' },
 ]
 </script>
 
@@ -197,8 +197,10 @@ const columns = [
         <StatusBadge :status="value" />
       </template>
       <template #cell-actions="{ row }">
-        <button class="btn small" @click="openEdit(row)">编辑</button>
-        <button class="btn small danger" style="margin-left:8px;" @click="remove(row)">删除</button>
+        <div class="actions-cell">
+          <button class="btn small" @click="openEdit(row)">编辑</button>
+          <button class="btn small danger" @click="remove(row)">删除</button>
+        </div>
       </template>
     </DataTable>
 
@@ -278,6 +280,11 @@ const columns = [
 .col-num {
   font-family: var(--font-mono);
   font-size: 13px;
+}
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
 }
 .form-checkbox-label {
   display: flex;

@@ -35,9 +35,10 @@ const createSessionForm = ref({
   live_status: '待安排',
 })
 
+const UNPLANNABLE = new Set(['进行中', '已结束'])
 const plannableSessions = computed(() => sessions.value.filter((item) => {
-  const status = String(item.live_status || '')
-  return !status.includes('进行中') && !status.includes('已结束')
+  const status = String(item.live_status || '').trim()
+  return !UNPLANNABLE.has(status)
 }))
 const selectedSession = computed(() => sessions.value.find((item) => item.live_id === selectedLiveId.value))
 const selectedAnchor = computed(() => anchors.value.find((item) => item.anchor_id === (plan.value?.anchor_id || selectedSession.value?.anchor_id || selectedAnchorId.value)))
@@ -51,7 +52,8 @@ const roleCounts = computed(() => {
 })
 const planReady = computed(() => plan.value && plan.value.items?.length)
 const canConfirmPlan = computed(() => planReady.value && plan.value.plan_status !== '已确认')
-const canEditPlan = computed(() => planReady.value && !['进行中', '已结束'].includes(String(plan.value?.live_status || '')))
+const LOCKED_STATUSES = new Set(['进行中', '已结束'])
+const canEditPlan = computed(() => planReady.value && !LOCKED_STATUSES.has(String(plan.value?.live_status || '').trim()))
 const isScheduledPlan = computed(() => plan.value?.live_status === '已排期')
 const categories = ['女装', '美妆', '箱包', '运动户外', '零食', '家居用品', '母婴', '数码', '食品饮料']
 
@@ -108,7 +110,7 @@ async function createSession() {
       live_title: createSessionForm.value.live_title || `${createSessionForm.value.live_category}待安排直播场次`,
     }
     const { data } = await liveSessionsAPI.create(payload)
-    const liveRes = await liveSessionsAPI.list({ pageSize: 200 })
+    const liveRes = await liveSessionsAPI.list({ pageSize: 200, sortBy: 'start_time', sortDir: 'desc' })
     sessions.value = liveRes.data.data || liveRes.data
     selectedLiveId.value = data.live_id
     selectedAnchorId.value = data.anchor_id || selectedAnchorId.value
@@ -146,7 +148,7 @@ async function loadBaseData() {
   const [productRes, anchorRes, liveRes] = await Promise.all([
     productsAPI.list({ pageSize: 100 }),
     anchorsAPI.list({ pageSize: 80 }),
-    liveSessionsAPI.list({ pageSize: 200 }),
+    liveSessionsAPI.list({ pageSize: 200, sortBy: 'start_time', sortDir: 'desc' }),
   ])
   products.value = productRes.data.data || productRes.data
   anchors.value = anchorRes.data.data || anchorRes.data
@@ -154,7 +156,20 @@ async function loadBaseData() {
   selectedProductId.value = products.value[0]?.product_id || ''
   selectedAnchorId.value = anchors.value[0]?.anchor_id || ''
   const requestedLiveId = String(route.query.liveId || '')
-  const requestedSession = plannableSessions.value.find((item) => item.live_id === requestedLiveId)
+  let requestedSession = plannableSessions.value.find((item) => item.live_id === requestedLiveId)
+  // If the requested session wasn't in the first page (e.g., old session pushed to page 2),
+  // fetch it individually so the dropdown always includes the URL-targeted session.
+  if (requestedLiveId && !requestedSession) {
+    try {
+      const { data } = await liveSessionsAPI.get(requestedLiveId)
+      if (data && data.live_id) {
+        sessions.value.unshift(data)
+        if (!UNPLANNABLE.has(String(data.live_status || '').trim())) {
+          requestedSession = data
+        }
+      }
+    } catch (_) { /* ignore — session may have been deleted */ }
+  }
   const firstPendingSession = plannableSessions.value.find((item) => item.live_status === '待安排')
   selectedLiveId.value = requestedSession?.live_id || firstPendingSession?.live_id || plannableSessions.value[0]?.live_id || sessions.value[0]?.live_id || ''
 }
@@ -184,12 +199,19 @@ async function loadPlanForSelectedSession() {
 
 async function loadFits() {
   error.value = ''
-  const { data } = await anchorProductPlanningAPI.fits({
-    productId: selectedProductId.value || undefined,
-    anchorId: selectedAnchorId.value || undefined,
-    limit: 30,
-  })
-  fits.value = data
+  try {
+    const { data } = await anchorProductPlanningAPI.fits({
+      productId: selectedProductId.value || undefined,
+      anchorId: selectedAnchorId.value || undefined,
+      limit: 30,
+    })
+    fits.value = Array.isArray(data) ? data : (data?.fits || data?.data || [])
+  } catch (e: any) {
+    fits.value = []
+    if (e.response?.status && e.response.status >= 500) {
+      error.value = '商品适配数据加载失败，可手动生成计划'
+    }
+  }
 }
 
 async function runProductFit() {
@@ -252,7 +274,7 @@ async function confirmPlan() {
     const { data } = await anchorProductPlanningAPI.confirmPlan(plan.value.plan_id)
     plan.value = data
     planDraft.value = clonePlanForEdit(data)
-    const liveRes = await liveSessionsAPI.list({ pageSize: 200 })
+    const liveRes = await liveSessionsAPI.list({ pageSize: 200, sortBy: 'start_time', sortDir: 'desc' })
     sessions.value = liveRes.data.data || liveRes.data
     message.value = '计划已确认，直播场次已更新为已排期。'
   } catch (e: any) {
@@ -358,57 +380,40 @@ onMounted(async () => {
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="message" class="message-banner">{{ message }}</div>
 
-    <section class="schedule-band">
-      <div class="session-picker">
-        <div class="field-title">未开播场次</div>
-        <select v-model="selectedLiveId" class="form-select">
-          <option v-for="session in plannableSessions" :key="session.live_id" :value="session.live_id">
-            {{ session.live_title }} / {{ session.live_status }} / {{ formatDate(session.start_time) }}
-          </option>
-        </select>
-        <div class="session-meta">
-          <span>{{ selectedSession?.anchor_name || selectedAnchor?.anchor_name || '-' }}</span>
-          <span>{{ selectedSession?.live_category || '-' }}</span>
-          <span>{{ selectedSession?.platform || '-' }}</span>
-        </div>
-      </div>
-
-      <div class="workflow-card">
-        <span>1</span>
-        <strong>生成排品草案</strong>
-        <small>依据主播专长、商品适配、库存与新品风险生成商品顺序和带货要素。</small>
-      </div>
-      <div class="workflow-card">
-        <span>2</span>
-        <strong>人工审查</strong>
-        <small>核对主推/辅推/试播、推荐时间、GMV 目标、订单目标和风险提示。</small>
-      </div>
-      <div class="workflow-card">
-        <span>3</span>
-        <strong>确认排期</strong>
-        <small>确认后计划状态固化，直播场次进入已排期，可用于后续开播执行。</small>
-      </div>
+    <!-- Session context bar: single-row, select existing or create new -->
+    <section class="session-context">
+      <label class="context-label">未开播场次</label>
+      <select v-model="selectedLiveId" class="form-select context-select">
+        <option v-for="session in plannableSessions" :key="session.live_id" :value="session.live_id">
+          {{ session.live_title }} / {{ session.live_status }} / {{ formatDate(session.start_time) }}
+        </option>
+      </select>
+      <button class="btn context-add-btn" @click="openCreateSession">+ 新增场次</button>
+      <span class="context-divider"></span>
+      <span class="meta-item">{{ selectedSession?.anchor_name || selectedAnchor?.anchor_name || '—' }}</span>
+      <span class="meta-sep">·</span>
+      <span class="meta-item">{{ selectedSession?.live_category || '—' }}</span>
+      <span class="meta-sep">·</span>
+      <span class="meta-item">{{ selectedSession?.platform || '—' }}</span>
+      <span class="meta-sep">·</span>
+      <span class="meta-item">{{ formatDate(selectedSession?.start_time) }}</span>
+      <span v-if="plan" class="plan-status" :class="statusClass(plan.plan_status)">{{ plan.plan_status }}</span>
     </section>
 
+    <!-- Workflow actions: operate on the selected session -->
     <section class="action-bar">
       <button class="btn primary" :disabled="loading || !selectedLiveId" @click="runLivePlan">
-        一键生成场次带货计划
+        生成带货计划
       </button>
       <button class="btn" :disabled="confirming || !canConfirmPlan" @click="confirmPlan">
-        确认无误并设为已排期
+        确认排期
       </button>
       <button class="btn" :disabled="savingPlan || !canEditPlan" @click="savePlanAdjustments">
-        {{ savingPlan ? '保存中...' : '保存人工调整' }}
+        {{ savingPlan ? '保存中...' : '保存调整' }}
       </button>
       <button v-if="isScheduledPlan" class="btn primary" :disabled="startingLive" @click="startLive">
         {{ startingLive ? '开启中...' : '开始直播' }}
       </button>
-      <button class="btn" @click="openCreateSession">
-        新增未开播场次
-      </button>
-      <span v-if="plan" class="plan-status" :class="statusClass(plan.plan_status)">
-        {{ plan.plan_status }} / {{ plan.live_status }}
-      </span>
     </section>
 
     <section class="summary-grid">
@@ -659,7 +664,7 @@ onMounted(async () => {
 .planning-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
 .error-banner,
@@ -677,82 +682,36 @@ onMounted(async () => {
   color: var(--success);
 }
 
-.schedule-band {
-  display: grid;
-  grid-template-columns: minmax(320px, 1.2fr) repeat(3, minmax(160px, 0.8fr));
-  gap: 14px;
-}
-
-.session-picker,
-.workflow-card,
-.summary-tile,
-.panel {
+/* ===== Session context bar — single row ===== */
+.session-context {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px;
   border: 1px solid var(--rule);
-  background: var(--paper);
-}
-
-.session-picker {
-  padding: 16px;
   background: var(--paper-dark);
 }
-
-.field-title {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-soft);
-  margin-bottom: 8px;
+.context-label {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--ink-soft); letter-spacing: 0.05em; white-space: nowrap;
+  flex-shrink: 0;
 }
-
-.session-meta {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-  color: var(--ink-soft);
-  font-size: 12px;
+.context-select { min-width: 240px; max-width: 360px; }
+.context-add-btn { white-space: nowrap; flex-shrink: 0; }
+.context-divider {
+  flex: 1; min-width: 12px;
 }
+.meta-item { white-space: nowrap; font-size: 12px; color: var(--ink-soft); }
+.meta-sep { color: var(--rule); flex-shrink: 0; }
 
-.workflow-card {
-  padding: 14px;
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  gap: 4px 10px;
-  align-items: start;
-}
-
-.workflow-card span {
-  grid-row: 1 / 3;
-  width: 28px;
-  height: 28px;
-  background: var(--ink);
-  color: var(--paper);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.workflow-card strong {
-  line-height: 1.2;
-}
-
-.workflow-card small {
-  color: var(--ink-soft);
-  line-height: 1.45;
-}
-
+/* ===== Action bar ===== */
 .action-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-
 .plan-status {
+  margin-left: auto;
   border: 1px solid var(--rule);
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 700;
+  padding: 5px 10px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-confirmed {
@@ -765,15 +724,20 @@ onMounted(async () => {
   color: var(--warning);
 }
 
+.summary-tile,
+.panel {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .summary-tile {
-  padding: 18px 20px;
-  min-height: 118px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -787,7 +751,7 @@ onMounted(async () => {
 
 .summary-tile strong {
   font-family: var(--font-serif);
-  font-size: 25px;
+  font-size: 22px;
   line-height: 1.15;
 }
 
@@ -798,12 +762,12 @@ onMounted(async () => {
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
-  gap: 20px;
+  gap: 14px;
   align-items: start;
 }
 
 .panel {
-  padding: 24px;
+  padding: 20px;
 }
 
 .panel-head {

@@ -250,10 +250,17 @@ export async function startSimulation(liveId: string, options: { preloadSeconds?
   });
   const baseOnline = 500 + Math.floor(Math.random() * 2000);
   const online = Math.max(50, baseOnline + Math.floor(Math.random() * 400));
-  const warmupGmv = Math.round((firstProduct?.sale_price || 99) * (2 + Math.floor(Math.random() * 8)));
-  const warmupSeries = createWarmupSeries(Date.now(), preloadSeconds, online, warmupGmv);
-  const warmChats = buildWarmupChats(category, firstProduct);
-  const warmOrders = buildWarmupOrders(firstProduct, warmupGmv);
+  const hasPreload = preloadSeconds > 0;
+
+  // Warmup data only makes sense when resuming a session that has been running.
+  // For fresh starts (preloadSeconds=0), begin with empty history so the chart
+  // shows a single point and builds naturally over time.
+  const warmupGmv = hasPreload ? Math.round((firstProduct?.sale_price || 99) * (2 + Math.floor(Math.random() * 8))) : 0;
+  const warmupSeries = hasPreload
+    ? createWarmupSeries(Date.now(), preloadSeconds, online, warmupGmv)
+    : { labels: [] as string[], online: [] as number[], gmv: [] as number[] };
+  const warmChats = hasPreload ? buildWarmupChats(category, firstProduct) : [];
+  const warmOrders = hasPreload ? buildWarmupOrders(firstProduct, warmupGmv) : [];
 
   const state: SimulatorState = {
     liveId,
@@ -263,7 +270,7 @@ export async function startSimulation(liveId: string, options: { preloadSeconds?
     baseOnline,
     totalOrders: warmOrders.length,
     gmv: warmOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0),
-    peakOnline: Math.max(...warmupSeries.online, online),
+    peakOnline: hasPreload ? Math.max(...warmupSeries.online, online) : online,
     startTime: startedAt,
     pendingChats: [],
     lastAnalysisTime: Date.now(),
@@ -290,6 +297,16 @@ export async function startSimulation(liveId: string, options: { preloadSeconds?
   await knex('LiveSession').where('live_id', liveId).update(update);
 
   sessions.set(liveId, state);
+
+  // Push the very first data point immediately so the chart shows data right away
+  pushSeriesPoint(state);
+  broadcast(liveId, 'metrics', {
+    online: state.online,
+    totalOrders: state.totalOrders,
+    gmv: Math.round(state.gmv * 100) / 100,
+    peakOnline: state.peakOnline,
+    duration: 0,
+  });
 
   // Send initial current product
   broadcast(liveId, 'current_product', {

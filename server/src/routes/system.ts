@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, ROLES } from '../middleware/auth';
 import { resetSystemToAcceptanceState } from '../services/systemReset';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.ADMIN));
 
 router.post('/reset', async (_req: Request, res: Response) => {
   try {

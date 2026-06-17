@@ -198,15 +198,15 @@ function isTop(val: number, metric: string) { return compareHighlights.value[met
 onMounted(() => load())
 
 const columns = [
-  { key: 'compare', label: '对比' },
-  { key: 'anchor_name', label: '主播姓名' },
-  { key: 'gender', label: '性别' },
-  { key: 'account_platform', label: '平台' },
-  { key: 'fan_count', label: '粉丝数' },
-  { key: 'specialization', label: '擅长品类' },
-  { key: 'anchor_level', label: '等级' },
-  { key: 'status', label: '状态' },
-  { key: 'actions', label: '操作' },
+  { key: 'compare', label: '对比', width: '6%' },
+  { key: 'anchor_name', label: '主播姓名', width: '14%' },
+  { key: 'gender', label: '性别', width: '6%' },
+  { key: 'account_platform', label: '平台', width: '8%' },
+  { key: 'fan_count', label: '粉丝数', width: '10%' },
+  { key: 'specialization', label: '擅长品类', width: '12%' },
+  { key: 'anchor_level', label: '等级', width: '7%' },
+  { key: 'status', label: '状态', width: '7%' },
+  { key: 'actions', label: '操作', width: '16%' },
 ]
 </script>
 

@@ -30,31 +30,39 @@ type MenuItem = {
   path: string
   label: string
   icon: Component
-  roles: string[]
 }
 
 const menuItems = computed<MenuItem[]>(() => {
   const allItems: MenuItem[] = [
-    { path: '/dashboard', label: '数据总览', icon: LayoutDashboard, roles: ['管理层', '运营人员', '采购人员', '仓储人员', '主播', '系统管理员'] },
-    { path: '/live-sessions', label: '直播场次', icon: Video, roles: ['运营人员', '管理层', '系统管理员'] },
-    { path: '/live-reviews', label: '直播复盘', icon: ClipboardCheck, roles: ['运营人员', '管理层', '主播', '系统管理员'] },
-    { path: '/selection', label: '选品分析', icon: Target, roles: ['运营人员', '管理层', '采购人员', '系统管理员'] },
-    { path: '/anchor-product-planning', label: '场次安排', icon: CalendarCheck, roles: ['运营人员', '管理层', '主播', '系统管理员'] },
-    { path: '/products', label: '商品管理', icon: Package, roles: ['运营人员', '管理层', '采购人员', '系统管理员'] },
-    { path: '/anchors', label: '主播管理', icon: Users, roles: ['运营人员', '管理层', '系统管理员'] },
-    { path: '/inventory', label: '库存管理', icon: Warehouse, roles: ['仓储人员', '管理层', '采购人员', '系统管理员'] },
-    { path: '/purchasing', label: '采购管理', icon: Truck, roles: ['采购人员', '管理层', '系统管理员'] },
-    { path: '/scripts', label: '脚本管理', icon: FileText, roles: ['运营人员', '主播', '管理层', '系统管理员'] },
-    { path: '/reports', label: '运营报告', icon: BarChart3, roles: ['管理层', '运营人员', '系统管理员'] },
-    { path: '/after-sales', label: '售后工单', icon: Headphones, roles: ['运营人员', '管理层', '系统管理员'] },
+    // 运营工作台 — 直播业务核心管线
+    { path: '/dashboard', label: '数据总览', icon: LayoutDashboard },
+    { path: '/live-sessions', label: '直播场次', icon: Video },
+    { path: '/anchor-product-planning', label: '场次安排', icon: CalendarCheck },
+    { path: '/selection', label: '选品分析', icon: Target },
+    { path: '/live-reviews', label: '直播复盘', icon: ClipboardCheck },
+    // 业务资料 — 基础主数据
+    { path: '/products', label: '商品管理', icon: Package },
+    { path: '/anchors', label: '主播管理', icon: Users },
+    { path: '/scripts', label: '脚本管理', icon: FileText },
+    // 履约与复盘 — 供应链 + 售后 + 分析
+    { path: '/purchasing', label: '采购管理', icon: Truck },
+    { path: '/inventory', label: '库存管理', icon: Warehouse },
+    { path: '/after-sales', label: '售后工单', icon: Headphones },
+    { path: '/reports', label: '运营报告', icon: BarChart3 },
   ]
-  return allItems.filter(item => item.roles.includes(auth.userRole))
+  // Filter by route-level permission (synced with permission matrix)
+  return allItems.filter(item => {
+    const routeForItem = router.resolve(item.path)
+    const perm = routeForItem?.meta?.permission as string | undefined
+    if (!perm) return true // no permission required → show
+    return auth.permissions.includes(perm)
+  })
 })
 
 const menuGroups = computed(() => [
-  { title: '运营工作台', items: menuItems.value.filter(item => ['/dashboard', '/live-sessions', '/live-reviews', '/selection', '/anchor-product-planning'].includes(item.path)) },
+  { title: '运营工作台', items: menuItems.value.filter(item => ['/dashboard', '/live-sessions', '/anchor-product-planning', '/selection', '/live-reviews'].includes(item.path)) },
   { title: '业务资料', items: menuItems.value.filter(item => ['/products', '/anchors', '/scripts'].includes(item.path)) },
-  { title: '履约与复盘', items: menuItems.value.filter(item => ['/inventory', '/purchasing', '/reports', '/after-sales'].includes(item.path)) },
+  { title: '履约与复盘', items: menuItems.value.filter(item => ['/purchasing', '/inventory', '/after-sales', '/reports'].includes(item.path)) },
 ].filter(group => group.items.length))
 
 function navigate(path: string) {
@@ -140,7 +148,7 @@ const roleLabels: Record<string, string> = {
           <LogOut :size="15" />
           <span>退出</span>
         </button>
-        <button class="icon-btn reset-btn" type="button" :disabled="resetting" title="复位验收数据" @click="resetSystem">
+        <button v-if="auth.roles.includes('系统管理员')" class="icon-btn reset-btn" type="button" :disabled="resetting" title="复位验收数据" @click="resetSystem">
           <RotateCcw :size="15" />
           <span>{{ resetting ? '复位中' : '复位' }}</span>
         </button>

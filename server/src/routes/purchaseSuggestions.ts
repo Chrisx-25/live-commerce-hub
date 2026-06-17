@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize, ROLES } from '../middleware/auth';
 import { generateSuggestions } from '../services/purchaseSuggestion';
 
 const router = Router();
 router.use(authenticate);
+router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.PURCHASING, ROLES.WAREHOUSE, ROLES.ADMIN));
 
 // GET /api/purchase-suggestions
 router.get('/', async (req: Request, res: Response) => {

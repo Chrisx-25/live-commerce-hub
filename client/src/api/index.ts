@@ -20,7 +20,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const auth = useAuthStore()
       auth.logout()
-      window.location.href = '/login'
+      // Only redirect if not already on login page — prevents infinite loop
+      // when an unauthenticated API call fails on the login page itself.
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }

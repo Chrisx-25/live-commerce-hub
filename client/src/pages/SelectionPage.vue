@@ -9,8 +9,8 @@ const recommendations = ref<any[]>([])
 const advisorReport = ref<any>(null)
 const loading = ref(false)
 const categoryFilter = ref('')
-const sortBy = ref('')
 const search = ref('')
+let currentSort = ''
 const selectedProductId = ref('')
 const selectedProductName = ref('')
 const advisorReportLoading = ref(false)
@@ -26,16 +26,14 @@ function doSearch() {
 
 function handleSortChange(state: { key: string; direction: string } | null) {
   if (!state) return
-  // 去掉 scores. 前缀以匹配后端 sort 参数
-  const sortKey = state.key.startsWith('scores.') ? state.key.replace('scores.', '') : state.key
-  sortBy.value = sortKey
+  currentSort = state.key.startsWith('scores.') ? state.key.replace('scores.', '') : state.key
   load()
 }
 
 async function load() {
   loading.value = true
   try {
-    const { data } = await selectionAPI.rankings({ category: categoryFilter.value, sort: sortBy.value, search: search.value })
+    const { data } = await selectionAPI.rankings({ category: categoryFilter.value, sort: currentSort, search: search.value })
     rankings.value = data
   } finally { loading.value = false }
 }
@@ -153,12 +151,6 @@ const recColumns = [
       <select v-model="categoryFilter" class="form-select" style="width:auto;" @change="load()">
         <option value="">全部分类</option>
         <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-      </select>
-      <select v-model="sortBy" class="form-select" style="width:auto;" @change="load()">
-        <option value="">综合排名</option>
-        <option value="conversion">转化力</option>
-        <option value="profitability">盈利力</option>
-        <option value="heat">热度</option>
       </select>
       <button class="btn" @click="load()">刷新</button>
       <button class="btn" :disabled="advisorReportLoading" @click="loadReport()">

@@ -301,12 +301,15 @@ export async function getLiveSessionReview(idOrLiveId: string) {
   return normalizeReview(review, products);
 }
 
-export async function listLiveSessionReviews() {
-  const reviews = await knex('LiveSessionReview')
+export async function listLiveSessionReviews(anchorId?: string) {
+  let query = knex('LiveSessionReview')
     .leftJoin('LiveSession', 'LiveSessionReview.live_id', 'LiveSession.live_id')
     .leftJoin('Anchor', 'LiveSessionReview.anchor_id', 'Anchor.anchor_id')
-    .select('LiveSessionReview.*', 'LiveSession.live_title', 'LiveSession.live_category', 'LiveSession.start_time', 'Anchor.anchor_name')
-    .orderBy('LiveSessionReview.generated_time', 'desc');
+    .select('LiveSessionReview.*', 'LiveSession.live_title', 'LiveSession.live_category', 'LiveSession.start_time', 'Anchor.anchor_name');
+
+  if (anchorId) query = query.where('LiveSessionReview.anchor_id', anchorId);
+
+  const reviews = await query.orderBy('LiveSessionReview.generated_time', 'desc');
 
   return Promise.all(reviews.map(async (review: any) => {
     const products = await knex('ProductReview').where('review_id', review.review_id).orderBy('gmv', 'desc');
