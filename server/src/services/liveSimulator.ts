@@ -120,16 +120,18 @@ function pushSeriesPoint(state: SimulatorState) {
   state.timeLabels.push(formatMMSS(duration));
   state.onlineHistory.push(state.online);
   state.gmvHistory.push(Math.round(state.gmv * 100) / 100);
-  if (state.timeLabels.length > 60) state.timeLabels.shift();
-  if (state.onlineHistory.length > 60) state.onlineHistory.shift();
-  if (state.gmvHistory.length > 60) state.gmvHistory.shift();
+  // Keep last 500 points — covers ~83 min at 10s intervals,
+  // so clients connecting mid-session get full-history snapshots.
+  if (state.timeLabels.length > 500) state.timeLabels.shift();
+  if (state.onlineHistory.length > 500) state.onlineHistory.shift();
+  if (state.gmvHistory.length > 500) state.gmvHistory.shift();
 }
 
 export function createWarmupSeries(nowMs: number, seconds: number, baseOnline: number, gmv: number) {
   const labels: string[] = [];
   const online: number[] = [];
   const gmvValues: number[] = [];
-  const points = 6;
+  const points = 30;
   for (let index = points - 1; index >= 0; index--) {
     // Spread labels evenly across the preload duration (in seconds)
     const elapsedSec = Math.round(seconds * (1 - (index / (points - 1))));

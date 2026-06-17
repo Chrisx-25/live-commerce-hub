@@ -100,13 +100,13 @@ function connectSSE() {
       points: onlineHistory.value,
       elapsedSeconds: elapsed,
       value: metrics.value.online,
-      maxPoints: 60,
+      maxPoints: 100,
     })
     const gmvResult = appendRealtimePoint({
       points: gmvHistory.value,
       elapsedSeconds: elapsed,
       value: metrics.value.gmv,
-      maxPoints: 60,
+      maxPoints: 100,
     })
     onlineHistory.value = onlineResult.points
     gmvHistory.value = gmvResult.points
@@ -174,7 +174,8 @@ function copyScript(text: string) {
 }
 
 // Chart data — X is real elapsed seconds, Y is online count.
-// Chart.js LinearScale renders the time axis naturally.
+// No point cap: keep full history so the line spans 0 → current time.
+// Chart.js LinearScale renders the time axis with nice round ticks.
 const onlineChartData = computed(() => ({
   datasets: [{
     label: '在线人数',
@@ -197,44 +198,49 @@ const sentimentChartData = computed(() => ({
   }],
 }))
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: {
-      type: 'linear' as const,
-      display: true,
-      grid: { display: false },
-      title: {
+const chartOptions = computed(() => {
+  const dur = metrics.value.duration || 0
+  const xMin = Math.max(0, dur - 300) // last 5 minutes sliding window
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        type: 'linear' as const,
+        min: xMin,
         display: true,
-        text: '直播时长 (分:秒)',
-        font: { size: 10 },
-        color: 'var(--ink-soft)',
-      },
-      ticks: {
-        maxTicksLimit: 8,
-        font: { size: 10 },
-        callback: (val: string | number) => {
-          const seconds = typeof val === 'number' ? val : Number(val)
-          if (!Number.isFinite(seconds) || seconds < 0) return ''
-          return formatElapsed(seconds)
+        grid: { display: false },
+        title: {
+          display: true,
+          text: '直播时长 (近5分钟)',
+          font: { size: 10 },
+          color: 'var(--ink-soft)',
+        },
+        ticks: {
+          maxTicksLimit: 6,
+          font: { size: 10 },
+          callback: (val: string | number) => {
+            const seconds = typeof val === 'number' ? val : Number(val)
+            if (!Number.isFinite(seconds) || seconds < 0) return ''
+            return formatElapsed(seconds)
+          },
         },
       },
-    },
-    y: {
-      display: true,
-      grid: { color: 'rgba(200,194,179,0.3)' },
-      title: {
+      y: {
         display: true,
-        text: '在线人数',
-        font: { size: 10 },
-        color: 'var(--ink-soft)',
+        grid: { color: 'rgba(200,194,179,0.3)' },
+        title: {
+          display: true,
+          text: '在线人数',
+          font: { size: 10 },
+          color: 'var(--ink-soft)',
+        },
+        ticks: { font: { size: 10 } },
       },
-      ticks: { font: { size: 10 } },
     },
-  },
-}
+  }
+})
 
 const doughnutOptions = {
   responsive: true,
