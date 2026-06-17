@@ -11,7 +11,7 @@ import knex from '../db/knex';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.ADMIN));
+router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.ANCHOR, ROLES.ADMIN));
 
 // GET /api/live-reviews
 router.get('/', async (req: Request, res: Response) => {

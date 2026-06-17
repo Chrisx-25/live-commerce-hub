@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler';
+import { sanitizeErrorMessage } from './utils/sanitizeError';
 import authRoutes from './routes/auth';
 import productsRoutes from './routes/products';
 import anchorsRoutes from './routes/anchors';
@@ -25,6 +26,25 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Auto-sanitize all error responses: intercept res.json to clean
+// technical/SQL/stack-trace messages before they reach the client.
+// This covers all ~76 route catch blocks without modifying any of them.
+app.use((_req, res, next) => {
+  const original = res.json.bind(res);
+  res.json = function (body: any): express.Response {
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      if (typeof body.message === 'string' && res.statusCode >= 400) {
+        body = { ...body, message: sanitizeErrorMessage(body.message) };
+      }
+      if (typeof body.error === 'string' && res.statusCode >= 400) {
+        body = { ...body, error: sanitizeErrorMessage(body.error) };
+      }
+    }
+    return original(body);
+  } as any;
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);

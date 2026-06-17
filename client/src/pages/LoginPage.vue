@@ -10,7 +10,6 @@ interface AccountInfo {
   department: string
   position: string
   roles: string[]
-  permissions: string[]
 }
 
 const auth = useAuthStore()
@@ -20,7 +19,6 @@ const employeeId = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
-const debugOpen = ref(false)
 const accounts = ref<AccountInfo[]>([])
 const selectedId = ref('')
 
@@ -49,12 +47,11 @@ function fillAccount(acc: AccountInfo) {
 }
 
 async function fetchAccounts() {
-  if (!auth.token) return  // Don't call authenticated endpoint without being logged in
   try {
-    const { data } = await api.get('/auth/accounts')
-    accounts.value = data.accounts
+    const { data } = await api.get('/auth/login-help')
+    accounts.value = data.accounts || []
   } catch {
-    // silent fail — debug panel won't show if API unavailable
+    // silent fail
   }
 }
 
@@ -63,68 +60,73 @@ onMounted(fetchAccounts)
 
 <template>
   <div class="login-page">
-    <div class="login-card">
-      <div class="login-brand">
-        直播电商中台
-        <span>LIVE COMMERCE HUB</span>
+    <div class="login-shell">
+      <!-- Left: Login form -->
+      <div class="login-card">
+        <div class="login-brand">
+          直播电商中台
+          <span>LIVE COMMERCE HUB</span>
+        </div>
+        <div class="login-divider"></div>
+        <form @submit.prevent="handleLogin">
+          <div class="form-group">
+            <label class="form-label">员工编号</label>
+            <input
+              v-model="employeeId"
+              type="text"
+              class="form-input"
+              placeholder="输入员工编号"
+              autocomplete="username"
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码</label>
+            <input
+              v-model="password"
+              type="password"
+              class="form-input"
+              placeholder="默认密码: 123456"
+              autocomplete="current-password"
+            />
+          </div>
+          <div v-if="error" class="login-error">{{ error }}</div>
+          <button type="submit" class="btn primary login-btn" :disabled="loading">
+            {{ loading ? '登录中...' : '登 录' }}
+          </button>
+        </form>
+        <div class="login-hint">
+          默认密码: 123456
+        </div>
       </div>
-      <div class="login-divider"></div>
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label class="form-label">员工编号</label>
-          <input
-            v-model="employeeId"
-            type="text"
-            class="form-input"
-            placeholder="输入员工编号"
-            autocomplete="username"
-          />
-        </div>
-        <div class="form-group">
-          <label class="form-label">密码</label>
-          <input
-            v-model="password"
-            type="password"
-            class="form-input"
-            placeholder="输入密码 (默认: 123456)"
-            autocomplete="current-password"
-          />
-        </div>
-        <div v-if="error" class="login-error">{{ error }}</div>
-        <button type="submit" class="btn primary" style="width:100%;justify-content:center;" :disabled="loading">
-          {{ loading ? '登录中...' : '登 录' }}
-        </button>
-      </form>
 
-      <!-- Debug account list -->
-      <div v-if="accounts.length" class="debug-panel">
-        <button class="debug-toggle" @click="debugOpen = !debugOpen">
-          🔧 调试: 可用账号 ({{ accounts.length }}) {{ debugOpen ? '▲' : '▼' }}
-        </button>
-        <div v-if="debugOpen" class="debug-list">
-          <div
+      <!-- Right: Account list -->
+      <div v-if="accounts.length" class="account-panel">
+        <div class="account-panel-header">
+          <span>测试账号</span>
+          <em>{{ accounts.length }} 个</em>
+        </div>
+        <div class="account-list">
+          <button
             v-for="acc in accounts"
             :key="acc.employee_id"
-            class="debug-row"
-            :class="{ selected: selectedId === acc.employee_id }"
+            type="button"
+            class="account-row"
+            :class="{ active: selectedId === acc.employee_id }"
             @click="fillAccount(acc)"
           >
-            <div class="debug-row-top">
-              <span class="debug-eid">{{ acc.employee_id }}</span>
-              <span class="debug-name">{{ acc.employee_name }}</span>
-              <span class="debug-dept">{{ acc.department }}</span>
-              <span class="debug-pos">{{ acc.position }}</span>
+            <div class="account-row-main">
+              <span class="acct-eid">{{ acc.employee_id }}</span>
+              <span class="acct-name">{{ acc.employee_name }}</span>
             </div>
-            <div class="debug-row-tags">
-              <span v-for="r in acc.roles" :key="r" class="badge badge-role">{{ r }}</span>
-              <span v-for="p in acc.permissions" :key="p" class="badge badge-perm">{{ p }}</span>
+            <div class="account-row-meta">
+              <span class="acct-dept">{{ acc.department }}</span>
+              <span class="acct-pos">{{ acc.position }}</span>
             </div>
-          </div>
+            <div class="account-row-roles">
+              <span v-for="r in acc.roles" :key="r" class="acct-role">{{ r }}</span>
+            </div>
+          </button>
         </div>
-      </div>
-
-      <div class="login-hint">
-        测试账号: EMP001 ~ EMP006 / 密码: 123456
       </div>
     </div>
   </div>
@@ -134,14 +136,26 @@ onMounted(fetchAccounts)
 .login-page {
   display: flex; align-items: center; justify-content: center;
   min-height: 100vh; background: var(--paper);
+  padding: 24px;
 }
+
+.login-shell {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  max-width: 820px;
+  width: 100%;
+}
+
+/* --- Left: login form --- */
 .login-card {
-  width: 460px; max-height: 95vh; overflow-y: auto;
-  padding: 40px 36px;
+  width: 400px;
+  flex-shrink: 0;
+  padding: 40px 32px;
   background: var(--paper-dark);
   border: 1px solid var(--rule-soft);
-  border-radius: 2px;
 }
+
 .login-brand {
   text-align: center;
   font-family: var(--font-serif);
@@ -160,105 +174,155 @@ onMounted(fetchAccounts)
 }
 .login-divider {
   width: 40px; height: 2px; background: var(--ink);
-  margin: 24px auto 32px;
+  margin: 24px auto 28px;
 }
 .login-error {
-  padding: 8px 12px; margin-bottom: 16px;
+  padding: 8px 12px; margin-bottom: 14px;
   background: var(--vermillion-soft);
   color: var(--vermillion);
-  font-size: 13px; border-radius: 2px;
+  font-size: 13px;
+}
+.login-btn {
+  width: 100%;
+  justify-content: center;
 }
 .login-hint {
-  margin-top: 20px; text-align: center;
+  margin-top: 18px; text-align: center;
   font-size: 12px; color: var(--ink-soft);
   font-family: var(--font-mono);
 }
 
-/* Debug panel */
-.debug-panel {
-  margin-top: 24px;
-  border-top: 1px solid var(--rule-soft);
-  padding-top: 16px;
-}
-.debug-toggle {
-  width: 100%;
-  background: none;
-  border: none;
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  padding: 4px 0;
-  text-align: center;
-  transition: color 0.15s;
-}
-.debug-toggle:hover {
-  color: var(--ink);
-}
-.debug-list {
-  margin-top: 10px;
-  max-height: 340px;
-  overflow-y: auto;
+/* --- Right: account panel --- */
+.account-panel {
+  flex: 1;
+  min-width: 280px;
+  max-height: 540px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.debug-row {
+  background: var(--paper-dark);
   border: 1px solid var(--rule-soft);
-  border-radius: 2px;
-  padding: 8px 10px;
+}
+
+.account-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.account-panel-header em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.account-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 3px 12px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
-.debug-row:hover {
+.account-row:hover {
   background: var(--paper);
-  border-color: var(--rule);
+  border-color: var(--rule-soft);
 }
-.debug-row.selected {
+.account-row.active {
   background: var(--paper);
   border-color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--ink);
 }
-.debug-row-top {
-  display: flex; align-items: baseline; gap: 8px;
-  font-size: 13px; margin-bottom: 5px;
+
+.account-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  grid-column: 1;
+  grid-row: 1;
 }
-.debug-eid {
+.acct-eid {
   font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink);
   min-width: 52px;
 }
-.debug-name {
+.acct-name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
 }
-.debug-dept {
-  color: var(--ink-soft);
-  font-size: 12px;
+
+.account-row-meta {
+  display: flex;
+  gap: 10px;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
 }
-.debug-pos {
+.acct-dept,
+.acct-pos {
+  font-size: 11px;
   color: var(--ink-soft);
-  font-size: 12px;
+}
+.acct-pos {
   font-style: italic;
 }
-.debug-row-tags {
-  display: flex; flex-wrap: wrap; gap: 3px;
+
+.account-row-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
-.badge {
+.acct-role {
   display: inline-block;
   font-size: 10px;
-  line-height: 1.4;
-  padding: 1px 6px;
-  border-radius: 2px;
-  white-space: nowrap;
-}
-.badge-role {
+  line-height: 1.5;
+  padding: 1px 7px;
   background: var(--ink);
   color: var(--paper);
   font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
 }
-.badge-perm {
-  background: var(--rule-soft);
-  color: var(--ink-soft);
+
+/* --- Responsive --- */
+@media (max-width: 720px) {
+  .login-shell {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+    max-width: 400px;
+  }
+  .login-card {
+    width: 100%;
+  }
+  .account-panel {
+    max-height: 320px;
+  }
 }
 </style>

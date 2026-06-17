@@ -314,11 +314,10 @@ const recColumns = [
         <DataTable :columns="rankColumns" :data="rankings" :loading="loading" @row-click="selectProduct" @sort-change="handleSortChange">
           <template #cell-product_name="{ row }">
             <span style="font-weight:600;">{{ row.product_name }}</span>
-            <span v-if="row.isColdStartCandidate" class="new-product-mark">新品</span>
           </template>
           <template #cell-product_status="{ row }">
             <span :class="row.isColdStartCandidate ? 'status-chip status-new' : 'status-chip'">
-              {{ row.isColdStartCandidate ? '待评估' : row.product_status }}
+              {{ row.isColdStartCandidate ? '新品' : row.product_status }}
             </span>
           </template>
           <template #cell-sale_price="{ value }">¥{{ value }}</template>

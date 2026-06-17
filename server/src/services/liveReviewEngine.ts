@@ -177,6 +177,14 @@ export function buildLiveReviewAnalysis(input: LiveReviewInput) {
     diagnosis.push({ dimension: '货品结构', level: '优势', conclusion: '商品贡献较均衡，主推和补充品组合可复用。' });
   }
 
+  if (anchor.performance_score >= 85) {
+    diagnosis.push({ dimension: '主播表现', level: '优势', conclusion: `主播「${anchor.anchor_name}」控场稳定（${anchor.performance_score}分），转化率${anchor.conversion_rate}%，可继续承接主推品节奏。` });
+  } else if (anchor.performance_score >= 60) {
+    diagnosis.push({ dimension: '主播表现', level: '关注', conclusion: `主播「${anchor.anchor_name}」表现中规中矩（${anchor.performance_score}分），需加强节奏控制和卖点提炼。` });
+  } else {
+    diagnosis.push({ dimension: '主播表现', level: '风险', conclusion: `主播「${anchor.anchor_name}」表现偏低（${anchor.performance_score}分），需重点训练控场、话术和转化引导。` });
+  }
+
   const scoreValue = boundedScore(
     core.gmvAchievement * 0.35
     + core.trafficAchievement * 0.2
@@ -189,8 +197,9 @@ export function buildLiveReviewAnalysis(input: LiveReviewInput) {
     grade: grade(scoreValue),
   };
 
-  const suggestions = buildSuggestions(core, funnel, topProducts, longTailProducts, sentiment);
-  const summary = `本场直播综合评定为${score.grade}级，GMV达成率${core.gmvAchievement}%，流量达成率${core.trafficAchievement}%，观看到下单转化率${core.actualConversionRate}%。${topProducts[0] ? `核心贡献商品为「${topProducts[0].product_name}」。` : ''}`;
+  const anchorName = input.anchor?.anchor_name || '未知主播';
+  const suggestions = buildSuggestions(core, funnel, topProducts, longTailProducts, sentiment, anchor);
+  const summary = `主播「${anchorName}」本场直播综合评定为${score.grade}级，GMV达成率${core.gmvAchievement}%，流量达成率${core.trafficAchievement}%，观看到下单转化率${core.actualConversionRate}%。${topProducts[0] ? `核心贡献商品为「${topProducts[0].product_name}」。` : ''}`;
 
   return {
     core,
@@ -216,6 +225,7 @@ function buildSuggestions(
   topProducts: any[],
   longTailProducts: any[],
   sentiment: ReturnType<typeof buildLiveReviewAnalysis>['sentiment'],
+  anchor: NonNullable<LiveReviewInput['anchor']>,
 ) {
   const suggestions: string[] = [];
 
@@ -245,5 +255,16 @@ function buildSuggestions(
     suggestions.push('针对负面弹幕集中问题建立预案话术，优先回应价格、质量、售后三类信任问题。');
   }
 
-  return suggestions.slice(0, 5);
+  if (anchor.performance_score < 85) {
+    const gaps: string[] = [];
+    if (anchor.conversion_rate < 3) gaps.push('转化话术和逼单节奏');
+    if (anchor.interaction_rate < 15) gaps.push('互动引导和停留时长');
+    if (anchor.script_execution_score < 80) gaps.push('脚本执行训练');
+    const gapText = gaps.length > 0 ? gaps.join('、') : '控场和转化能力';
+    suggestions.push(`主播「${anchor.anchor_name}」表现评分${anchor.performance_score}，建议强化${gapText}。`);
+  } else {
+    suggestions.push(`主播「${anchor.anchor_name}」表现稳定（${anchor.performance_score}分），可将当前话术节奏沉淀为脚本模板，赋能同品类其他主播。`);
+  }
+
+  return suggestions.slice(0, 6);
 }

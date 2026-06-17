@@ -185,12 +185,16 @@ async function loadPlanForSelectedSession() {
     if (data?.anchor_id) selectedAnchorId.value = data.anchor_id
   } catch (e: any) {
     if (e.response?.status === 404 && selectedSession.value?.live_status === '已排期') {
-      const { data: draft } = await anchorProductPlanningAPI.createPlan(selectedLiveId.value)
-      const { data: confirmed } = await anchorProductPlanningAPI.confirmPlan(draft.plan_id)
-      plan.value = confirmed
-      planDraft.value = clonePlanForEdit(confirmed)
-      if (confirmed?.anchor_id) selectedAnchorId.value = confirmed.anchor_id
-      message.value = '已自动补齐本场已排期直播的带货安排详情。'
+      try {
+        const { data: draft } = await anchorProductPlanningAPI.createPlan(selectedLiveId.value)
+        const { data: confirmed } = await anchorProductPlanningAPI.confirmPlan(draft.plan_id)
+        plan.value = confirmed
+        planDraft.value = clonePlanForEdit(confirmed)
+        if (confirmed?.anchor_id) selectedAnchorId.value = confirmed.anchor_id
+        message.value = '已自动补齐本场已排期直播的带货安排详情。'
+      } catch (autoErr: any) {
+        error.value = autoErr.response?.data?.message || '自动补齐已排期计划失败，请手动生成'
+      }
       return
     }
     if (e.response?.status !== 404) error.value = e.response?.data?.message || '计划加载失败'
@@ -198,7 +202,6 @@ async function loadPlanForSelectedSession() {
 }
 
 async function loadFits() {
-  error.value = ''
   try {
     const { data } = await anchorProductPlanningAPI.fits({
       productId: selectedProductId.value || undefined,
@@ -206,11 +209,10 @@ async function loadFits() {
       limit: 30,
     })
     fits.value = Array.isArray(data) ? data : (data?.fits || data?.data || [])
-  } catch (e: any) {
+  } catch (_e: any) {
+    // Fits are reference information only; a failed load should not
+    // surface as a page-level error. The panel shows its own empty state.
     fits.value = []
-    if (e.response?.status && e.response.status >= 500) {
-      error.value = '商品适配数据加载失败，可手动生成计划'
-    }
   }
 }
 
@@ -419,8 +421,8 @@ onMounted(async () => {
     <section class="summary-grid">
       <div class="summary-tile">
         <span>计划场次</span>
-        <strong>{{ selectedSession?.live_title || '-' }}</strong>
-        <small>{{ formatDate(selectedSession?.start_time) }}</small>
+        <strong>{{ (selectedSession?.live_title || '-').split('#')[0] }}</strong>
+        <small>{{ (selectedSession?.live_title || '').includes('#') ? '#' + (selectedSession?.live_title || '').split('#')[1] : '#' + (selectedSession?.live_id || '-') }}</small>
       </div>
       <div class="summary-tile">
         <span>主播与品类</span>
@@ -667,8 +669,7 @@ onMounted(async () => {
   gap: 14px;
 }
 
-.error-banner,
-.message-banner {
+.error-banner {
   border: 1px solid rgba(196, 30, 58, 0.35);
   background: rgba(196, 30, 58, 0.08);
   color: var(--vermillion);
@@ -677,9 +678,11 @@ onMounted(async () => {
 }
 
 .message-banner {
-  border-color: rgba(20, 105, 78, 0.28);
+  border: 1px solid rgba(20, 105, 78, 0.28);
   background: rgba(20, 105, 78, 0.08);
   color: var(--success);
+  padding: 12px 14px;
+  font-weight: 600;
 }
 
 /* ===== Session context bar — single row ===== */

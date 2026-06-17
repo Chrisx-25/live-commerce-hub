@@ -14,17 +14,79 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+function sanitizeErrorMessage(msg: string): string {
+  if (!msg || typeof msg !== 'string') return '操作失败，请稍后重试。';
+  const lower = msg.toLowerCase();
+
+  // SQL / database errors
+  const sqlMarkers = [
+    'insert into', 'update ', 'delete from', 'create table',
+    'violation of', 'constraint', 'cannot insert',
+    'foreign key', 'primary key', 'unique key',
+    'duplicate key', 'incorrect syntax', 'invalid column',
+    'invalid object', 'could not', 'data too long', 'truncation',
+    'mssql', 'sqlerror', 'syntax error',
+  ];
+  if (sqlMarkers.some((m) => lower.includes(m))) {
+    return '数据操作异常，请稍后重试或联系管理员。';
+  }
+
+  // Stack traces / file paths
+  const techMarkers = [
+    '\n    at ', 'node:', 'node_modules',
+    'Error:', 'TypeError:', 'ReferenceError:', 'SyntaxError:',
+    '.ts:', '.js:', '.vue:',
+  ];
+  if (techMarkers.some((m) => lower.includes(m)) || /[A-Z]:[\\/]\S+/i.test(msg)) {
+    return '系统内部错误，请稍后重试。';
+  }
+
+  // Connection errors
+  if (
+    lower.includes('connect econnrefused') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('network error')
+  ) {
+    return '服务连接异常，请检查网络后重试。';
+  }
+
+  // Timeout
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return '请求超时，请稍后重试。';
+  }
+
+  // Long English-only messages (likely technical)
+  if (/^[a-zA-Z\s.,!?'"()\[\]{}:;@#$%^&*+=<>/\\|-]+$/.test(msg.trim()) && msg.length > 30) {
+    return '系统内部错误，请稍后重试。';
+  }
+
+  return msg;
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       const auth = useAuthStore()
       auth.logout()
-      // Only redirect if not already on login page — prevents infinite loop
-      // when an unauthenticated API call fails on the login page itself.
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
+    }
+    // Sanitize technical messages in response body
+    const data = error.response?.data;
+    if (data && typeof data === 'object') {
+      if (typeof data.message === 'string') {
+        error.response.data = { ...data, message: sanitizeErrorMessage(data.message) };
+      }
+      if (typeof data.error === 'string') {
+        error.response.data = { ...error.response.data, error: sanitizeErrorMessage(data.error) };
+      }
+    }
+    // Also sanitize the raw JS Error.message (used as fallback in some pages)
+    if (error.message && typeof error.message === 'string') {
+      error.message = sanitizeErrorMessage(error.message);
     }
     return Promise.reject(error)
   }

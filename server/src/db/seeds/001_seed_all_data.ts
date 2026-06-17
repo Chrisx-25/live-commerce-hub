@@ -87,7 +87,7 @@ export async function seed(knex: Knex): Promise<void> {
   const opPerms      = ['PERM001','PERM002','PERM003','PERM004','PERM007','PERM008','PERM009','PERM010','PERM011','PERM013','PERM014','PERM015','PERM016','PERM018','PERM019','PERM020'];
   const purchPerms   = ['PERM001','PERM005','PERM010','PERM014','PERM016'];
   const whPerms      = ['PERM001','PERM006','PERM010','PERM014','PERM016'];
-  const anchorPerms  = ['PERM001','PERM007','PERM008','PERM010','PERM015','PERM018','PERM019'];
+  const anchorPerms  = ['PERM001','PERM007','PERM008','PERM009','PERM010','PERM015','PERM018','PERM019'];
   const ap: { relation_id: string; role_id: string; permission_id: string }[] = [];
   for (const p of mgmtPerms)   ap.push({ relation_id: id(), role_id: 'ROLE001', permission_id: p });
   for (const p of opPerms)     ap.push({ relation_id: id(), role_id: 'ROLE002', permission_id: p });

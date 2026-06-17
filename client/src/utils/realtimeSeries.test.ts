@@ -1,38 +1,53 @@
 import assert from 'node:assert/strict'
-import { appendRealtimePoint, secondsSince } from './realtimeSeries'
+import { appendRealtimePoint, secondsSince, parseElapsedSeconds, formatElapsed } from './realtimeSeries'
 
-const initialLabels = ['10:00:00']
-const initialOnline = [1200]
-const initialGmv = [99]
+// Test: appendRealtimePoint with real elapsed seconds
+const initial = appendRealtimePoint({
+  points: [],
+  elapsedSeconds: 0,
+  value: 1200,
+  maxPoints: 60,
+})
+assert.deepEqual(initial.points, [{ x: 0, y: 1200 }])
 
 const updated = appendRealtimePoint({
-  labels: initialLabels,
-  online: initialOnline,
-  gmv: initialGmv,
-  label: '10:00:02',
-  onlineValue: 1438,
-  gmvValue: 1892,
-  maxPoints: 2,
+  points: initial.points,
+  elapsedSeconds: 6,
+  value: 1438,
+  maxPoints: 60,
 })
+assert.deepEqual(updated.points, [
+  { x: 0, y: 1200 },
+  { x: 6, y: 1438 },
+])
+assert.notEqual(updated.points, initial.points, 'should return a new array reference for Vue reactivity')
 
-assert.deepEqual(updated.labels, ['10:00:00', '10:00:02'])
-assert.deepEqual(updated.online, [1200, 1438])
-assert.deepEqual(updated.gmv, [99, 1892])
-assert.notEqual(updated.labels, initialLabels, 'labels should use a new array reference for chart watchers')
-assert.notEqual(updated.online, initialOnline, 'online data should use a new array reference for chart watchers')
-
+// Test: trimming to maxPoints
+const many = Array.from({ length: 60 }, (_, i) => ({ x: i * 6, y: i * 10 }))
 const trimmed = appendRealtimePoint({
-  labels: updated.labels,
-  online: updated.online,
-  gmv: updated.gmv,
-  label: '10:00:04',
-  onlineValue: 1501,
-  gmvValue: 2100,
-  maxPoints: 2,
+  points: many,
+  elapsedSeconds: 360,
+  value: 999,
+  maxPoints: 60,
 })
+assert.equal(trimmed.points.length, 60)
+assert.equal(trimmed.points[0].x, 6) // first old point dropped
+assert.equal(trimmed.points[59].x, 360) // newest point
+assert.equal(trimmed.points[59].y, 999)
 
-assert.deepEqual(trimmed.labels, ['10:00:02', '10:00:04'])
-assert.deepEqual(trimmed.online, [1438, 1501])
+// Test: parseElapsedSeconds
+assert.equal(parseElapsedSeconds('00:00'), 0)
+assert.equal(parseElapsedSeconds('01:30'), 90)
+assert.equal(parseElapsedSeconds('10:05'), 605)
+assert.equal(parseElapsedSeconds('invalid'), 0)
+
+// Test: formatElapsed
+assert.equal(formatElapsed(0), '00:00')
+assert.equal(formatElapsed(90), '01:30')
+assert.equal(formatElapsed(605), '10:05')
+assert.equal(formatElapsed(3661), '61:01')
+
+// Test: secondsSince
 assert.equal(secondsSince(new Date('2026-06-14T10:00:00Z').getTime(), new Date('2026-06-14T10:00:05Z').getTime()), 5)
 
 console.log('realtime series tests passed')

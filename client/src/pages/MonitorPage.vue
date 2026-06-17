@@ -4,11 +4,10 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { liveSessionsAPI } from '../api'
 import PageHeader from '../components/PageHeader.vue'
-import { appendRealtimePoint, secondsSince } from '../utils/realtimeSeries'
+import { appendRealtimePoint, secondsSince, parseElapsedSeconds, formatElapsed, type RealtimePoint } from '../utils/realtimeSeries'
 import { Line, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
-  CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
@@ -18,7 +17,7 @@ import {
   Filler,
 } from 'chart.js'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
+ChartJS.register(LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -40,10 +39,9 @@ const signals = ref<any[]>([])
 const connected = ref(false)
 const currentProduct = ref<{ product_name: string; price: number } | null>(null)
 
-// History arrays for charts (keep last 60 data points)
-const onlineHistory = ref<number[]>([])
-const timeLabels = ref<string[]>([])
-const gmvHistory = ref<number[]>([])
+// History arrays for charts — each point stores real elapsed seconds as X
+const onlineHistory = ref<RealtimePoint[]>([])
+const gmvHistory = ref<RealtimePoint[]>([])
 
 function formatCurrency(v: number) { return v >= 10000 ? '¥' + (v / 10000).toFixed(1) + '万' : '¥' + v.toFixed(0) }
 function formatDuration(sec: number) {
@@ -51,12 +49,6 @@ function formatDuration(sec: number) {
   const m = Math.floor((sec % 3600) / 60)
   const s = sec % 60
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}
-
-function formatMMSS(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60)
-  const s = Math.floor(totalSeconds % 60)
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 async function loadSession() {
@@ -85,27 +77,39 @@ function connectSSE() {
     currentProduct.value = snapshot.currentProduct || currentProduct.value
     insight.value = snapshot.insight || insight.value
     scriptRecommendation.value = snapshot.scriptRecommendation || scriptRecommendation.value
-    timeLabels.value = Array.isArray(snapshot.series?.labels) ? snapshot.series.labels : []
-    onlineHistory.value = Array.isArray(snapshot.series?.online) ? snapshot.series.online : []
-    gmvHistory.value = Array.isArray(snapshot.series?.gmv) ? snapshot.series.gmv : []
+    // Reconstruct {x: elapsedSeconds, y: value} from snapshot arrays
+    const snapLabels = Array.isArray(snapshot.series?.labels) ? snapshot.series.labels : []
+    const snapOnline = Array.isArray(snapshot.series?.online) ? snapshot.series.online : []
+    const snapGmv = Array.isArray(snapshot.series?.gmv) ? snapshot.series.gmv : []
+    onlineHistory.value = snapOnline.map((y, i) => ({
+      x: snapLabels[i] ? parseElapsedSeconds(snapLabels[i]) : i * 6,
+      y,
+    }))
+    gmvHistory.value = snapGmv.map((y, i) => ({
+      x: snapLabels[i] ? parseElapsedSeconds(snapLabels[i]) : i * 6,
+      y,
+    }))
     startLocalTimer()
   })
   es.addEventListener('metrics', (e) => {
     const nextMetrics = JSON.parse(e.data)
     if (!simulationStartMs.value) simulationStartMs.value = Date.now() - (Number(nextMetrics.duration) || 0) * 1000
     metrics.value = { ...nextMetrics, duration: secondsSince(simulationStartMs.value) }
-    const nextSeries = appendRealtimePoint({
-      labels: timeLabels.value,
-      online: onlineHistory.value,
-      gmv: gmvHistory.value,
-      label: formatMMSS(metrics.value.duration),
-      onlineValue: metrics.value.online,
-      gmvValue: metrics.value.gmv,
+    const elapsed = metrics.value.duration
+    const onlineResult = appendRealtimePoint({
+      points: onlineHistory.value,
+      elapsedSeconds: elapsed,
+      value: metrics.value.online,
       maxPoints: 60,
     })
-    timeLabels.value = nextSeries.labels
-    onlineHistory.value = nextSeries.online
-    gmvHistory.value = nextSeries.gmv
+    const gmvResult = appendRealtimePoint({
+      points: gmvHistory.value,
+      elapsedSeconds: elapsed,
+      value: metrics.value.gmv,
+      maxPoints: 60,
+    })
+    onlineHistory.value = onlineResult.points
+    gmvHistory.value = gmvResult.points
   })
   es.addEventListener('order', (e) => {
     const order = JSON.parse(e.data)
@@ -169,9 +173,9 @@ function copyScript(text: string) {
   navigator.clipboard.writeText(text).then(() => { alert('话术已复制到剪贴板！') })
 }
 
-// Chart data
+// Chart data — X is real elapsed seconds, Y is online count.
+// Chart.js LinearScale renders the time axis naturally.
 const onlineChartData = computed(() => ({
-  labels: timeLabels.value,
   datasets: [{
     label: '在线人数',
     data: onlineHistory.value,
@@ -198,8 +202,37 @@ const chartOptions = {
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 6, font: { size: 10 } } },
-    y: { display: true, grid: { color: 'rgba(200,194,179,0.3)' }, ticks: { font: { size: 10 } } },
+    x: {
+      type: 'linear' as const,
+      display: true,
+      grid: { display: false },
+      title: {
+        display: true,
+        text: '直播时长 (分:秒)',
+        font: { size: 10 },
+        color: 'var(--ink-soft)',
+      },
+      ticks: {
+        maxTicksLimit: 8,
+        font: { size: 10 },
+        callback: (val: string | number) => {
+          const seconds = typeof val === 'number' ? val : Number(val)
+          if (!Number.isFinite(seconds) || seconds < 0) return ''
+          return formatElapsed(seconds)
+        },
+      },
+    },
+    y: {
+      display: true,
+      grid: { color: 'rgba(200,194,179,0.3)' },
+      title: {
+        display: true,
+        text: '在线人数',
+        font: { size: 10 },
+        color: 'var(--ink-soft)',
+      },
+      ticks: { font: { size: 10 } },
+    },
   },
 }
 
@@ -368,7 +401,7 @@ onUnmounted(() => {
             </div>
             <div v-else class="script-empty">
               等待信号触发...<br/>
-              <span style="font-size:11px;">检测到价格质疑/购买意向/负面情绪时自动推送</span>
+              <span style="font-size:11px;">检测到价格质疑/购买意向/产品咨询/负面情绪/冷场时自动推送</span>
             </div>
 
             <div v-if="signals.length > 0" style="margin-top:16px;">

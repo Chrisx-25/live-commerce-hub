@@ -6,7 +6,7 @@ import { addSSEClient, getSimulator, removeSSEClient, startSimulation, stopSimul
 
 const router = Router();
 router.use(authenticate);
-router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.ADMIN));
+router.use(authorize(ROLES.MANAGEMENT, ROLES.OPERATIONS, ROLES.ANCHOR, ROLES.ADMIN));
 
 /** Check anchor ownership for a live session; returns 403 if anchor user tries to access another's session */
 async function checkSessionAccess(req: Request, liveId: string, res: Response) {

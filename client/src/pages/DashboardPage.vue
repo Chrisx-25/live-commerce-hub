@@ -244,8 +244,8 @@ const categoryChartOptions = computed(() => ({
     legend: {
       position: 'right' as const,
       labels: {
-        boxWidth: 8, boxHeight: 8, padding: 10,
-        font: { family: "'Noto Sans SC', sans-serif", size: 11 },
+        boxWidth: 8, boxHeight: 8, padding: 5,
+        font: { family: "'Noto Sans SC', sans-serif", size: 10 },
         color: '#3A3A3A',
         usePointStyle: true,
       },

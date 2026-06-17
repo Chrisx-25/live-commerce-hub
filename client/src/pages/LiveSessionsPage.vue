@@ -112,15 +112,15 @@ function changePage(p: number) { page.value = p; load() }
 onMounted(() => { refresh() })
 
 const columns = [
-  { key: 'live_title', label: '直播标题', width: '24%' },
+  { key: 'live_title', label: '直播标题', width: '22%' },
   { key: 'anchor_name', label: '主播', width: '10%' },
-  { key: 'platform', label: '平台', width: '8%' },
-  { key: 'live_category', label: '品类', width: '8%' },
-  { key: 'start_time', label: '开始时间', width: '14%' },
-  { key: 'live_status', label: '状态', width: '8%' },
-  { key: 'online_peak', label: '峰值在线', width: '8%' },
-  { key: 'total_sales', label: '销售额', width: '8%' },
-  { key: 'actions', label: '操作', sortable: false, width: '12%' },
+  { key: 'platform', label: '平台', width: '6%' },
+  { key: 'live_category', label: '品类', width: '7%' },
+  { key: 'start_time', label: '开始时间', width: '13%' },
+  { key: 'live_status', label: '状态', width: '7%' },
+  { key: 'online_peak', label: '峰值在线', width: '7%' },
+  { key: 'total_sales', label: '销售额', width: '12%' },
+  { key: 'actions', label: '操作', sortable: false, width: '16%' },
 ]
 
 </script>
@@ -166,13 +166,15 @@ const columns = [
       <template #cell-online_peak="{ value }">{{ value?.toLocaleString() || '-' }}</template>
       <template #cell-total_sales="{ value }">{{ formatPrice(value) }}</template>
       <template #cell-actions="{ row }">
-        <button
-          class="btn small"
-          :class="{ primary: row.live_status !== '已结束' }"
-          @click.stop="goSession(row)"
-        >
-          {{ getActionLabel(row.live_status) }}
-        </button>
+        <div class="actions-cell">
+          <button
+            class="btn small"
+            :class="{ primary: row.live_status !== '已结束' }"
+            @click.stop="goSession(row)"
+          >
+            {{ getActionLabel(row.live_status) }}
+          </button>
+        </div>
       </template>
     </DataTable>
 
@@ -181,6 +183,10 @@ const columns = [
 </template>
 
 <style scoped>
+.actions-cell {
+  display: flex; gap: 8px; white-space: nowrap;
+}
+
 .toolbar-hint {
   color: var(--ink-soft);
   font-size: 13px;

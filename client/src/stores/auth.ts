@@ -8,6 +8,7 @@ export const useAuthStore = defineStore('auth', () => {
   const employee = ref<Employee | null>(null)
   const roles = ref<string[]>([])
   const permissions = ref<string[]>([])
+  const initialized = ref(false)
 
   const isLoggedIn = computed(() => !!token.value)
   const userRole = computed(() => roles.value[0] || '')
@@ -18,6 +19,7 @@ export const useAuthStore = defineStore('auth', () => {
     employee.value = data.employee
     roles.value = data.roles
     permissions.value = data.permissions
+    initialized.value = true
     localStorage.setItem('token', data.token)
   }
 
@@ -28,6 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
       employee.value = data.employee
       roles.value = data.roles
       permissions.value = data.permissions
+      initialized.value = true
     } catch {
       logout()
     }
@@ -38,8 +41,9 @@ export const useAuthStore = defineStore('auth', () => {
     employee.value = null
     roles.value = []
     permissions.value = []
+    initialized.value = false
     localStorage.removeItem('token')
   }
 
-  return { token, employee, roles, permissions, isLoggedIn, userRole, login, fetchMe, logout }
+  return { token, employee, roles, permissions, initialized, isLoggedIn, userRole, login, fetchMe, logout }
 })

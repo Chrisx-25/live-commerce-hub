@@ -108,6 +108,15 @@ router.beforeEach((to, _from, next) => {
     next('/login')
     return
   }
+  // On fresh page load / refresh, default to Dashboard
+  if (!auth.initialized) {
+    if (to.path === '/dashboard') {
+      next() // allow dashboard to render while fetching user info
+    } else {
+      next('/dashboard') // redirect any other route to dashboard
+    }
+    return
+  }
   // Check route-level permission
   const required = to.meta.permission as string | undefined
   if (required && !auth.permissions.includes(required)) {

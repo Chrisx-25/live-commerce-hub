@@ -193,9 +193,6 @@ async function getProductInput(productId: string): Promise<ProductFitInput> {
 
 async function saveFit(fit: AnchorProductFitResult) {
   const now = new Date();
-  const existing = await knex('AnchorProductFit')
-    .where({ anchor_id: fit.anchor_id, product_id: fit.product_id })
-    .first();
   const payload = {
     fit_score: fit.fit_score,
     fit_level: fit.fit_level,
@@ -207,20 +204,35 @@ async function saveFit(fit: AnchorProductFitResult) {
     updated_time: now,
   };
 
+  const existing = await knex('AnchorProductFit')
+    .where({ anchor_id: fit.anchor_id, product_id: fit.product_id })
+    .first();
   if (existing) {
     await knex('AnchorProductFit').where('fit_id', existing.fit_id).update(payload);
     return existing.fit_id;
   }
 
   const fitId = id('FIT');
-  await knex('AnchorProductFit').insert({
-    fit_id: fitId,
-    anchor_id: fit.anchor_id,
-    product_id: fit.product_id,
-    generated_time: now,
-    ...payload,
-  });
-  return fitId;
+  try {
+    await knex('AnchorProductFit').insert({
+      fit_id: fitId,
+      anchor_id: fit.anchor_id,
+      product_id: fit.product_id,
+      generated_time: now,
+      ...payload,
+    });
+    return fitId;
+  } catch (err: any) {
+    // Handle race condition: another concurrent call may have inserted the same pair
+    const dup = await knex('AnchorProductFit')
+      .where({ anchor_id: fit.anchor_id, product_id: fit.product_id })
+      .first();
+    if (dup) {
+      await knex('AnchorProductFit').where('fit_id', dup.fit_id).update(payload);
+      return dup.fit_id;
+    }
+    throw err;
+  }
 }
 
 function normalizeFit(row: any) {
@@ -254,18 +266,24 @@ async function buildAndSaveFit(anchorId: string, productId: string) {
 export async function generateFitsForProduct(productId: string, limit = 12) {
   const product = await getProductInput(productId);
   const anchors = await knex('Anchor').orderBy('fan_count', 'desc');
-  const fits = await Promise.all(anchors.map(async (anchor: any) => {
+  const results = await Promise.allSettled(anchors.map(async (anchor: any) => {
     const anchorInput = await getAnchorInput(anchor.anchor_id, product.category);
     const fit = buildAnchorProductFit(anchorInput, product);
     const fitId = await saveFit(fit);
     return { fit_id: fitId, ...fit };
   }));
+  const fits = results
+    .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+    .map((r) => r.value);
   return fits.sort((a, b) => b.fit_score - a.fit_score).slice(0, limit);
 }
 
 export async function generateFitsForAnchor(anchorId: string, limit = 24) {
   const products = await knex('Product').orderBy('create_time', 'desc');
-  const fits = await Promise.all(products.map(async (product: any) => buildAndSaveFit(anchorId, product.product_id)));
+  const results = await Promise.allSettled(products.map(async (product: any) => buildAndSaveFit(anchorId, product.product_id)));
+  const fits = results
+    .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+    .map((r) => r.value);
   return fits.sort((a, b) => b.fit_score - a.fit_score).slice(0, limit);
 }
 

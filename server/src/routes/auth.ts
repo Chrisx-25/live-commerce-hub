@@ -121,6 +121,48 @@ router.get('/accounts', authenticate, authorize(ROLES.ADMIN), async (_req: Reque
   }
 });
 
+// GET /api/auth/login-help — public: returns account list for login page (no permissions, no passwords)
+router.get('/login-help', async (_req: Request, res: Response) => {
+  try {
+    const rows = await knex('Employee')
+      .leftJoin('EmployeeRole', 'Employee.employee_id', 'EmployeeRole.employee_id')
+      .leftJoin('Role', 'EmployeeRole.role_id', 'Role.role_id')
+      .select(
+        'Employee.employee_id',
+        'Employee.employee_name',
+        'Employee.department',
+        'Employee.position',
+        'Role.role_name'
+      )
+      .orderBy('Employee.employee_id');
+
+    const map = new Map<string, {
+      employee_id: string;
+      employee_name: string;
+      department: string;
+      position: string;
+      roles: string[];
+    }>();
+
+    for (const r of rows) {
+      if (!map.has(r.employee_id)) {
+        map.set(r.employee_id, {
+          employee_id: r.employee_id,
+          employee_name: r.employee_name,
+          department: r.department,
+          position: r.position,
+          roles: [],
+        });
+      }
+      if (r.role_name) map.get(r.employee_id)!.roles.push(r.role_name);
+    }
+
+    return res.json({ accounts: Array.from(map.values()) });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {

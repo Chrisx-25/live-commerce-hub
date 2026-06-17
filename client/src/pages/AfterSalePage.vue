@@ -88,14 +88,14 @@ function levelClass(level: string) {
 onMounted(() => load())
 
 const columns = [
-  { key: 'nickname', label: '用户', width: '14%' },
-  { key: 'aftersale_type', label: '售后类型', width: '10%' },
-  { key: 'problem_description', label: '问题描述', width: '22%' },
-  { key: 'refund_amount', label: '退款金额', width: '9%' },
-  { key: 'complaint_level', label: '投诉等级', width: '9%' },
-  { key: 'process_status', label: '处理状态', width: '9%' },
+  { key: 'nickname', label: '用户', width: '13%' },
+  { key: 'aftersale_type', label: '售后类型', width: '7%' },
+  { key: 'problem_description', label: '问题描述', width: '21%' },
+  { key: 'refund_amount', label: '退款金额', width: '10%' },
+  { key: 'complaint_level', label: '投诉等级', width: '7%' },
+  { key: 'process_status', label: '处理状态', width: '12%' },
   { key: 'create_time', label: '创建时间', width: '14%' },
-  { key: 'actions', label: '操作', sortable: false },
+  { key: 'actions', label: '操作', sortable: false, width: '16%' },
 ]
 </script>
 
@@ -153,9 +153,11 @@ const columns = [
             </template>
             <template #cell-create_time="{ value }">{{ formatDate(value) }}</template>
             <template #cell-actions="{ row }">
-              <button v-if="row.process_status === '待处理'" class="btn small primary" @click.stop="updateStatus(row, '处理中')">开始处理</button>
-              <button v-if="row.process_status === '处理中'" class="btn small primary" @click.stop="updateStatus(row, '已完成')">完成</button>
-              <button v-if="row.process_status === '待处理' || row.process_status === '处理中'" class="btn small danger" style="margin-left:8px;" @click.stop="updateStatus(row, '已关闭')">关闭</button>
+              <div class="actions-cell">
+                <button v-if="row.process_status === '待处理'" class="btn small primary" @click.stop="updateStatus(row, '处理中')">处理</button>
+                <button v-if="row.process_status === '处理中'" class="btn small primary" @click.stop="updateStatus(row, '已完成')">完成</button>
+                <button v-if="row.process_status === '待处理' || row.process_status === '处理中'" class="btn small" @click.stop="updateStatus(row, '已关闭')">关闭</button>
+              </div>
             </template>
           </DataTable>
         </div>
@@ -232,6 +234,10 @@ const columns = [
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
   gap: 20px;
   align-items: start;
+}
+
+.actions-cell {
+  display: flex; gap: 8px; white-space: nowrap;
 }
 
 .problem-cell {

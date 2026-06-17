@@ -457,7 +457,7 @@ export async function seedAcceptanceData(knex: Knex) {
     ROLE002: [0,1,2,3,6,7,8,9,10,12,13,14,15,17,18,19],                           // 运营人员 — 16
     ROLE003: [0,4,10,13,15],                                                       // 采购人员 — 5
     ROLE004: [0,5,10,13,15],                                                       // 仓储人员 — 5
-    ROLE005: [0,6,7,10,14,17,18],                                                  // 主播 — 7
+    ROLE005: [0,6,7,8,14,17,18],                                                  // 主播 — 7 (数据分析替代报告查看)
     ROLE006: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],                 // 系统管理员 — 20
   };
   await insertBatches(knex, 'RolePermission', data.roles.flatMap((role) => {
