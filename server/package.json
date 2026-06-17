@@ -10,7 +10,7 @@
     "migrate:rollback": "knex migrate:rollback --knexfile src/db/knexfile.ts",
     "seed": "tsx run-seed.ts",
     "seed:acceptance": "tsx run-acceptance-seed.ts",
-    "db:reset": "tsx db-restore.ts",
+    "db:reset": "npx kill-port 3000 2>/dev/null; sleep 1; tsx db-restore.ts && echo '' && echo '🔄 请重启服务: cd .. && npm run dev'",
     "db:backup": "tsx db-snapshot.ts --save",
     "db:regenerate": "tsx run-migrate.ts && tsx run-seed.ts && tsx llm-enhance-seed.ts",
     "test:acceptance": "tsx src/services/selectionEngine.test.ts && tsx src/services/inventoryPlanning.test.ts && tsx src/services/liveSimulator.test.ts && tsx src/services/liveReviewEngine.test.ts && tsx src/services/anchorProductFitEngine.test.ts && tsx src/services/anchorProductPlanningService.test.ts && tsx src/services/systemReset.test.ts && tsx src/db/acceptanceSeed.test.ts"

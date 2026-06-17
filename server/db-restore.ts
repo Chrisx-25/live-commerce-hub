@@ -68,6 +68,24 @@ ALTER DATABASE [${DB_NAME}] SET MULTI_USER;
       { encoding: 'utf-8', timeout: 120000 }
     );
     console.log(result);
+
+    // Verify: check that key tables have data
+    try {
+      const check = execSync(
+        `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[Employee]; SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[Order]; SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[LiveSession];"`,
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      const counts = check.match(/\d+/g);
+      if (counts && counts.length >= 3) {
+        console.log(`\n✓ 数据校验: Employee=${counts[0]}  Order=${counts[1]}  LiveSession=${counts[2]}`);
+        if (parseInt(counts[0]) === 0) {
+          console.error('✗ 警告: Employee 表为空，恢复可能未生效！');
+        }
+      }
+    } catch (_) {
+      // non-critical — skip verification
+    }
+
     console.log('✓ 数据库恢复完成！请重启后端服务。');
   } catch (err: any) {
     console.error('✗ 恢复失败:', err.message);
