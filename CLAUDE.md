@@ -110,33 +110,25 @@ npm run db:reset   →   从备份文件恢复全库 (db-restore.ts)
 - **列出备份**: `npx tsx db-restore.ts --list`
 - **手动指定备份**: `npx tsx db-restore.ts --bak <path>`（支持 .bak 和 .bak.gz）
 
-#### 新队友首次拉取
+#### 队友上手（任选一种）
 
+**方式一：用 Claude Code（推荐）**
+在项目目录打开 Claude Code，直接说：
+> "帮我初始化这个项目：装依赖、配 .env、恢复数据库、启动"
+
+Claude 会读这份文档自动执行。
+
+**方式二：手动安装**
 ```bash
-# 1. 克隆仓库
+# 首次
 git clone https://github.com/Chrisx-25/live-commerce-hub.git && cd live-commerce-hub
+bash setup.sh      # 一键：装依赖 + 配 .env + 恢复数据库
+npm run dev        # 启动
 
-# 2. 配置 .env（从 .env.example 复制，填入 MSSQL sa 密码）
-cp server/.env.example server/.env
-
-# 3. 安装依赖
-npm install && cd server && npm install && cd ../client && npm install && cd ..
-
-# 4. 恢复数据库（自动解压 .bak.gz → RESTORE，约10秒）
-cd server && npm run db:reset
-
-# 5. 启动项目
-cd .. && npm run dev
-# 前端 :5173 | 后端 :3000 | 默认账号 EMP001/123456
+# 日常更新
+git pull && cd server && npm run db:reset && cd .. && npm run dev
 ```
-
-#### 已配置的队友更新
-
-```bash
-git pull origin wkl            # 拉取最新代码 + 备份
-cd server && npm run db:reset  # 恢复数据库（同步导师的最新数据节点）
-cd .. && npm run dev           # 启动
-```
+`git pull` 同时拉代码和数据库备份，`db:reset` 把备份灌进 MSSQL。
 
 ### 数据库生成 (db:regenerate) — 仅开发/改表结构时使用
 
