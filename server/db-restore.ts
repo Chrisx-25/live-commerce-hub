@@ -72,15 +72,18 @@ ALTER DATABASE [${DB_NAME}] SET MULTI_USER;
     // Verify: check that key tables have data
     try {
       const check = execSync(
-        `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[Employee]; SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[Order]; SELECT COUNT(*) FROM [live_commerce_hub].[dbo].[LiveSession];"`,
+        `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "SET NOCOUNT ON; SELECT 'EMP_COUNT:' + CAST(COUNT(*) AS VARCHAR) FROM [live_commerce_hub].[dbo].[Employee]; SELECT 'ORD_COUNT:' + CAST(COUNT(*) AS VARCHAR) FROM [live_commerce_hub].[dbo].[Order]; SELECT 'SES_COUNT:' + CAST(COUNT(*) AS VARCHAR) FROM [live_commerce_hub].[dbo].[LiveSession];"`,
         { encoding: 'utf-8', timeout: 10000 }
       );
-      const counts = check.match(/\d+/g);
-      if (counts && counts.length >= 3) {
-        console.log(`\n✓ 数据校验: Employee=${counts[0]}  Order=${counts[1]}  LiveSession=${counts[2]}`);
-        if (parseInt(counts[0]) === 0) {
-          console.error('✗ 警告: Employee 表为空，恢复可能未生效！');
-        }
+      const empMatch = check.match(/EMP_COUNT:(\d+)/);
+      const ordMatch = check.match(/ORD_COUNT:(\d+)/);
+      const sesMatch = check.match(/SES_COUNT:(\d+)/);
+      const empCount = empMatch ? parseInt(empMatch[1]) : -1;
+      const ordCount = ordMatch ? parseInt(ordMatch[1]) : -1;
+      const sesCount = sesMatch ? parseInt(sesMatch[1]) : -1;
+      console.log(`\n✓ 数据校验: Employee=${empCount}  Order=${ordCount}  LiveSession=${sesCount}`);
+      if (empCount === 0) {
+        console.error('✗ 警告: Employee 表为空，恢复可能未生效！');
       }
     } catch (_) {
       // non-critical — skip verification
