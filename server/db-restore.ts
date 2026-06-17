@@ -55,16 +55,32 @@ function restore(bakPath: string) {
   console.log(`  时间: ${stat.mtime.toISOString()}`);
   console.log('');
 
-  const sql = `
-ALTER DATABASE [${DB_NAME}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-RESTORE DATABASE [${DB_NAME}] FROM DISK = N'${bakPath.replace(/\\/g, '\\\\')}' WITH REPLACE;
-ALTER DATABASE [${DB_NAME}] SET MULTI_USER;
-`;
+  // Step 1: kill all connections (retry up to 3 times — tsx watch may restart)
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      execSync(
+        `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "ALTER DATABASE [${DB_NAME}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;"`,
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      break;
+    } catch (err: any) {
+      if (attempt < 3) {
+        console.log(`  等待连接释放 (尝试 ${attempt}/3)...`);
+        execSync('sleep 3', { timeout: 5000 });
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // Step 2: restore
+  const restoreSQL = `RESTORE DATABASE [${DB_NAME}] FROM DISK = N'${bakPath.replace(/\\/g, '\\\\')}' WITH REPLACE;
+ALTER DATABASE [${DB_NAME}] SET MULTI_USER;`;
 
   try {
     console.log('正在恢复...');
     const result = execSync(
-      `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "${sql.replace(/\n/g, ' ')}"`,
+      `sqlcmd -S ${DB_HOST} -U ${DB_USER} -P "${DB_PASSWORD}" -Q "${restoreSQL.replace(/\n/g, ' ')}"`,
       { encoding: 'utf-8', timeout: 120000 }
     );
     console.log(result);
