@@ -5,7 +5,7 @@ import { authenticate, authorize, ROLES } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorize(ROLES.PURCHASING, ROLES.ADMIN));
+router.use(authorize(ROLES.PURCHASING, ROLES.WAREHOUSE, ROLES.ADMIN));
 
 // GET /api/purchases
 router.get('/', async (req: Request, res: Response) => {
