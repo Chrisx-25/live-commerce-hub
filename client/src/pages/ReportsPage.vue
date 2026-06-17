@@ -9,6 +9,24 @@ const reports = ref<(OperationReport & Record<string, any>)[]>([])
 const typeFilter = ref('')
 const viewing = ref<(OperationReport & Record<string, any>) | null>(null)
 const loading = ref(false)
+const totalStats = ref([
+  { label: '报告总数', value: 0, hint: '全库报告总量' },
+  { label: '日/周/月/季报', value: 0, hint: '周期性经营复盘' },
+  { label: '专项分析', value: 0, hint: '选品、售后、库存与绩效' },
+])
+
+async function loadStats() {
+  const { data } = await reportsAPI.list({})
+  const typeCounts = (data as any[]).reduce((acc: Record<string, number>, item) => {
+    acc[item.report_type] = (acc[item.report_type] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  totalStats.value = [
+    { label: '报告总数', value: data.length, hint: '全库报告总量' },
+    { label: '日/周/月/季报', value: (typeCounts['销售日报'] || 0) + (typeCounts['销售周报'] || 0) + (typeCounts['销售月报'] || 0) + (typeCounts['销售季报'] || 0), hint: '周期性经营复盘' },
+    { label: '专项分析', value: (typeCounts['专项分析'] || 0) + (typeCounts['选品分析'] || 0) + (typeCounts['售后分析'] || 0) + (typeCounts['库存分析'] || 0) + (typeCounts['主播绩效'] || 0) + (typeCounts['综合报告'] || 0), hint: '选品、售后、库存与绩效' },
+  ]
+}
 
 async function load() {
   loading.value = true
@@ -27,18 +45,6 @@ async function viewReport(report: OperationReport) {
 }
 
 function formatDate(d: string) { return d ? new Date(d).toLocaleString('zh-CN') : '-' }
-
-const reportStats = computed(() => {
-  const typeCounts = reports.value.reduce((acc: Record<string, number>, item) => {
-    acc[item.report_type] = (acc[item.report_type] || 0) + 1
-    return acc
-  }, {})
-  return [
-    { label: '报告总数', value: reports.value.length, hint: '当前筛选范围' },
-    { label: '日/周/月/季报', value: (typeCounts['销售日报'] || 0) + (typeCounts['销售周报'] || 0) + (typeCounts['销售月报'] || 0) + (typeCounts['销售季报'] || 0), hint: '周期性经营复盘' },
-    { label: '专项分析', value: (typeCounts['专项分析'] || 0) + (typeCounts['选品分析'] || 0) + (typeCounts['售后分析'] || 0) + (typeCounts['库存分析'] || 0) + (typeCounts['主播绩效'] || 0) + (typeCounts['综合报告'] || 0), hint: '选品、售后、库存与绩效' },
-  ]
-})
 
 const reportParagraphs = computed(() => {
   const content = viewing.value?.report_content || ''
@@ -68,7 +74,7 @@ const insightCards = computed(() => {
   ]
 })
 
-onMounted(() => load())
+onMounted(() => { loadStats(); load() })
 
 const columns = [
   { key: 'report_title', label: '报告标题', width: '33%' },
@@ -84,7 +90,7 @@ const columns = [
   <PageHeader title="运营报告" subtitle="经营复盘、专项分析与管理建议" />
   <div class="page-body reports-page">
     <section class="report-summary">
-      <div v-for="item in reportStats" :key="item.label" class="summary-card">
+      <div v-for="item in totalStats" :key="item.label" class="summary-card">
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
         <small>{{ item.hint }}</small>
