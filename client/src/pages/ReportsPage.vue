@@ -35,8 +35,8 @@ const reportStats = computed(() => {
   }, {})
   return [
     { label: '报告总数', value: reports.value.length, hint: '当前筛选范围' },
-    { label: '周/月报', value: (typeCounts['周报'] || 0) + (typeCounts['月报'] || 0), hint: '常规经营复盘' },
-    { label: '专项分析', value: (typeCounts['专项分析'] || 0) + (typeCounts['选品专项'] || 0) + (typeCounts['售后专项'] || 0), hint: '选品、售后与风险' },
+    { label: '日/周/月/季报', value: (typeCounts['销售日报'] || 0) + (typeCounts['销售周报'] || 0) + (typeCounts['销售月报'] || 0) + (typeCounts['销售季报'] || 0), hint: '周期性经营复盘' },
+    { label: '专项分析', value: (typeCounts['专项分析'] || 0) + (typeCounts['选品分析'] || 0) + (typeCounts['售后分析'] || 0) + (typeCounts['库存分析'] || 0) + (typeCounts['主播绩效'] || 0) + (typeCounts['综合报告'] || 0), hint: '选品、售后、库存与绩效' },
   ]
 })
 
