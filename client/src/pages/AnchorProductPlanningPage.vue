@@ -404,7 +404,7 @@ onMounted(async () => {
 
     <!-- Workflow actions: operate on the selected session -->
     <section class="action-bar">
-      <button class="btn primary" :disabled="loading || !selectedLiveId" @click="runLivePlan">
+      <button :class="isScheduledPlan ? 'btn' : 'btn primary'" :disabled="loading || !selectedLiveId" @click="runLivePlan">
         生成带货计划
       </button>
       <button class="btn" :disabled="confirming || !canConfirmPlan" @click="confirmPlan">

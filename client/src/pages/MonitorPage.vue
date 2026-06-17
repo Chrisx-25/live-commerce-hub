@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { liveSessionsAPI } from '../api'
 import PageHeader from '../components/PageHeader.vue'
+import KpiCard from '../components/KpiCard.vue'
 import { appendRealtimePoint, secondsSince, parseElapsedSeconds, formatElapsed, type RealtimePoint } from '../utils/realtimeSeries'
 import { Line, Doughnut } from 'vue-chartjs'
 import {
@@ -169,25 +170,37 @@ function stopSim() {
   })
 }
 
+const copyMsg = ref('')
+let copyMsgTimer: ReturnType<typeof setTimeout> | null = null
+
 function copyScript(text: string) {
-  navigator.clipboard.writeText(text).then(() => { alert('话术已复制到剪贴板！') })
+  navigator.clipboard.writeText(text).then(() => {
+    copyMsg.value = '话术已复制到剪贴板'
+    if (copyMsgTimer) clearTimeout(copyMsgTimer)
+    copyMsgTimer = setTimeout(() => { copyMsg.value = '' }, 2000)
+  })
 }
 
-// Chart data — X is real elapsed seconds, Y is online count.
-// No point cap: keep full history so the line spans 0 → current time.
-// Chart.js LinearScale renders the time axis with nice round ticks.
-const onlineChartData = computed(() => ({
-  datasets: [{
-    label: '在线人数',
-    data: onlineHistory.value,
-    borderColor: '#C41E3A',
-    backgroundColor: 'rgba(196, 30, 58, 0.06)',
-    fill: true,
-    tension: 0.3,
-    pointRadius: 0,
-    borderWidth: 2,
-  }],
-}))
+// Chart data — only show last 5 minutes, so Chart.js auto-fits
+// the scale to the visible data without extra padding on either side.
+const onlineChartData = computed(() => {
+  const cutoff = Math.max(0, (metrics.value.duration || 0) - 300)
+  const visible = cutoff > 0
+    ? onlineHistory.value.filter((p) => p.x >= cutoff)
+    : onlineHistory.value
+  return {
+    datasets: [{
+      label: '在线人数',
+      data: visible,
+      borderColor: '#C41E3A',
+      backgroundColor: 'rgba(196, 30, 58, 0.06)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+      borderWidth: 2,
+    }],
+  }
+})
 
 const sentimentChartData = computed(() => ({
   labels: ['正面', '中性', '负面'],
@@ -198,49 +211,46 @@ const sentimentChartData = computed(() => ({
   }],
 }))
 
-const chartOptions = computed(() => {
-  const dur = metrics.value.duration || 0
-  const xMin = Math.max(0, dur - 300) // last 5 minutes sliding window
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: {
-        type: 'linear' as const,
-        min: xMin,
+const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  layout: { padding: { left: 0, right: 0, top: 8, bottom: 0 } },
+  plugins: { legend: { display: false } },
+  scales: {
+    x: {
+      type: 'linear' as const,
+      bounds: 'data' as const,
+      display: true,
+      grid: { display: false },
+      title: {
         display: true,
-        grid: { display: false },
-        title: {
-          display: true,
-          text: '直播时长 (近5分钟)',
-          font: { size: 10 },
-          color: 'var(--ink-soft)',
-        },
-        ticks: {
-          maxTicksLimit: 6,
-          font: { size: 10 },
-          callback: (val: string | number) => {
-            const seconds = typeof val === 'number' ? val : Number(val)
-            if (!Number.isFinite(seconds) || seconds < 0) return ''
-            return formatElapsed(seconds)
-          },
-        },
+        text: '直播时长 (近5分钟)',
+        font: { size: 10 },
+        color: 'var(--ink-soft)',
       },
-      y: {
-        display: true,
-        grid: { color: 'rgba(200,194,179,0.3)' },
-        title: {
-          display: true,
-          text: '在线人数',
-          font: { size: 10 },
-          color: 'var(--ink-soft)',
+      ticks: {
+        maxTicksLimit: 6,
+        font: { size: 10 },
+        callback: (val: string | number) => {
+          const seconds = typeof val === 'number' ? val : Number(val)
+          if (!Number.isFinite(seconds) || seconds < 0) return ''
+          return formatElapsed(seconds)
         },
-        ticks: { font: { size: 10 } },
       },
     },
-  }
-})
+    y: {
+      display: true,
+      grid: { color: 'rgba(200,194,179,0.3)' },
+      title: {
+        display: true,
+        text: '在线人数',
+        font: { size: 10 },
+        color: 'var(--ink-soft)',
+      },
+      ticks: { font: { size: 10 } },
+    },
+  },
+}))
 
 const doughnutOptions = {
   responsive: true,
@@ -265,6 +275,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (eventSource.value) eventSource.value.close()
   stopLocalTimer()
+  if (copyMsgTimer) clearTimeout(copyMsgTimer)
 })
 </script>
 
@@ -295,23 +306,11 @@ onUnmounted(() => {
       </div>
 
       <!-- KPI Row -->
-      <div class="live-kpi-row">
-        <div class="kpi-card">
-          <div class="kpi-label">在线人数</div>
-          <div class="kpi-value">{{ metrics.online.toLocaleString() }}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">累计订单</div>
-          <div class="kpi-value">{{ metrics.totalOrders.toLocaleString() }}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">累计GMV</div>
-          <div class="kpi-value gmv">{{ formatCurrency(metrics.gmv) }}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">峰值在线</div>
-          <div class="kpi-value">{{ metrics.peakOnline.toLocaleString() }}</div>
-        </div>
+      <div class="monitor-kpi-row">
+        <KpiCard label="在线人数" :value="metrics.online.toLocaleString()" />
+        <KpiCard label="累计订单" :value="metrics.totalOrders.toLocaleString()" />
+        <KpiCard label="累计 GMV" :value="formatCurrency(metrics.gmv)" />
+        <KpiCard label="峰值在线" :value="metrics.peakOnline.toLocaleString()" />
       </div>
 
       <!-- Charts Row -->
@@ -404,6 +403,7 @@ onUnmounted(() => {
                 <button class="btn small primary" @click="copyScript(scriptRecommendation.scriptSnippet)">复制话术</button>
                 <button class="btn small" @click="scriptRecommendation = null">换一条</button>
               </div>
+              <div v-if="copyMsg" class="copy-toast">{{ copyMsg }}</div>
             </div>
             <div v-else class="script-empty">
               等待信号触发...<br/>
@@ -440,7 +440,15 @@ onUnmounted(() => {
   background: var(--info-soft); color: var(--info);
   padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 2px;
 }
-.live-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-md); margin-bottom: var(--space-lg); }
+.monitor-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+.monitor-kpi-row :deep(.kpi-card) { padding: 14px 18px 14px; }
+.monitor-kpi-row :deep(.kpi-label) { font-size: 10px; margin-bottom: 4px; letter-spacing: 0.06em; }
+.monitor-kpi-row :deep(.kpi-value) { font-size: 28px; }
 
 /* Order items */
 .order-item {
@@ -471,4 +479,14 @@ onUnmounted(() => {
 .signal-item { font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--rule-soft); }
 .signal-time { font-family: var(--font-mono); color: var(--ink-soft); }
 .signal-name { color: var(--info); margin-left: 8px; }
+
+.copy-toast {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  text-align: center;
+}
 </style>
