@@ -11,6 +11,42 @@ function n(value: any) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * 估算直播间的曝光观看率 (viewRate = viewers ÷ exposure)。
+ *
+ * 行业常识：直播曝光观看率通常在 4%~15% 之间。
+ * - 流量精准（低跳出、高点击、高转化）→ 观看率偏高 → 同样观看人数需要的曝光更少
+ * - 大体量直播间 → 推送面广 → 观看率偏低 → 同样观看人数需要的曝光更多
+ *
+ * 当 UserBehaviorStat 存在时，用 bounce_rate / click_rate / conversion_rate 综合评分；
+ * 缺失时用 online_peak 体量推估，确保场次间有差异。
+ */
+function estimateViewRate(session: any, behavior: any): number {
+  const bounce = n(behavior?.bounce_rate);
+  const click = n(behavior?.click_rate);
+  const conv = n(behavior?.conversion_rate);
+  const peak = n(session?.online_peak) || 100;
+
+  if (behavior && (bounce > 0 || click > 0)) {
+    // 有行为数据：用三项指标加权推算流量精准度
+    // bounce 10~35% → 贡献 -1.5 ~ +2.0（低跳出=好流量）
+    // click  1~10%  → 贡献 -1.0 ~ +3.5（高点击=好流量）
+    // conv   0.5~6% → 贡献 -0.5 ~ +2.0（高转化=好流量）
+    const bounceScore = (22 - Math.min(bounce, 35)) * 0.12;
+    const clickScore  = (Math.min(click, 10) - 3) * 0.5;
+    const convScore   = (Math.min(conv, 6) - 1.5) * 0.35;
+    // 基线 7%，浮动 ±3%，钳制在 3.5% ~ 14%
+    return Math.max(3.5, Math.min(14, 7 + bounceScore + clickScore + convScore));
+  }
+
+  // 无行为数据：按直播间体量推估。大体量→泛流量→低观看率；小体量→精准流量→高观看率
+  // peak 100  → log10(100)=2  → 10-2*1.8=6.4%
+  // peak 1000 → log10(1000)=3 → 10-3*1.8=4.6%
+  // peak 10000→ log10(10000)=4→ 10-4*1.8=2.8%→钳制到3.5%
+  const scale = Math.log10(Math.max(peak, 10));
+  return Math.max(3.5, Math.min(12, 10 - scale * 1.8));
+}
+
 function parseJson(value: any, fallback: any) {
   if (!value) return fallback;
   try {
@@ -122,7 +158,12 @@ async function getFunnel(liveId: string, session: any, productInputs: LiveReview
     ? productInputs.reduce((sum, item) => sum + n(item.click_rate), 0) / productInputs.length
     : n(latestBehavior?.click_rate);
   const productClicks = Math.max(Math.round(viewers * (averageClickRate || 18) / 100), orders, 1);
-  const exposure = Math.max(Math.round(viewers / ((n(latestBehavior?.click_rate) || 28) / 100)), viewers, 1);
+
+  // ---- 曝光估算 (exposure estimation) ----
+  // 真实直播电商中，曝光观看率(viewRate)通常 4%~15%。
+  // 曝光 = 观看人数 ÷ 观看率。观看率越高说明流量越精准 → 同样观看量需要的曝光越少。
+  // 我们用已有的行为指标(bounce/click/conversion)反推流量精准度，再折算观看率。
+  const exposure = Math.max(Math.round(viewers / (estimateViewRate(session, latestBehavior) / 100)), viewers, 1);
 
   return {
     exposure,

@@ -124,6 +124,7 @@ const columns = [
         <option value="退货">退货</option>
         <option value="换货">换货</option>
         <option value="投诉">投诉</option>
+        <option value="其它">其它</option>
       </select>
       <select v-model="levelFilter" class="form-select" style="width:auto;" @change="applyFilter">
         <option value="">全部等级</option>

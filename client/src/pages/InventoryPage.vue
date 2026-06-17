@@ -126,8 +126,8 @@ async function batchPurchaseAll() {
 }
 
 function riskType(level: string) {
-  if (level === '高') return 'danger'
-  if (level === '中') return 'warning'
+  if (level === '高' || level === '缺货') return 'danger'
+  if (level === '中' || level === '不足') return 'warning'
   return 'success'
 }
 
@@ -177,6 +177,7 @@ const alertColumns = [
         <option value="">全部状态</option>
         <option value="正常">正常</option>
         <option value="不足">不足</option>
+        <option value="缺货">缺货</option>
       </select>
       <button class="btn" :class="{ primary: showAlerts }" @click="loadAlerts">
         {{ showAlerts ? '隐藏预警' : '库存预警' }}
