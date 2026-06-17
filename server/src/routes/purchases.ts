@@ -82,6 +82,24 @@ router.post('/', async (req: Request, res: Response) => {
       create_time: new Date(),
     };
     await knex('PurchaseOrder').insert(purchase);
+
+    // After purchase, reset inventory risk to 正常 + bump stock to safety level
+    if (req.body.sku_id) {
+      const inv = await knex('Inventory').where('sku_id', req.body.sku_id).first();
+      if (inv) {
+        const newStock = Math.max(inv.current_stock || 0, inv.safety_stock || 20);
+        await knex('Inventory')
+          .where('sku_id', req.body.sku_id)
+          .update({
+            inventory_status: '正常',
+            current_stock: newStock,
+            last_update_time: new Date(),
+          });
+        // Also update SKU stock_quantity
+        await knex('SKU').where('sku_id', req.body.sku_id).update({ stock_quantity: newStock });
+      }
+    }
+
     return res.status(201).json(purchase);
   } catch (err: any) {
     return res.status(500).json({ message: err.message });

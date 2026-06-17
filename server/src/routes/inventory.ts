@@ -172,6 +172,21 @@ router.post('/batch-purchase', async (req: Request, res: Response) => {
           expected_arrival_time: arrivalDate,
           create_time: now,
         });
+
+        // Reset inventory risk to 正常 after purchase
+        const inv = await knex('Inventory').where('sku_id', item.sku_id).first();
+        if (inv) {
+          const newStock = Math.max(inv.current_stock || 0, inv.safety_stock || 20);
+          await knex('Inventory')
+            .where('sku_id', item.sku_id)
+            .update({
+              inventory_status: '正常',
+              current_stock: newStock,
+              last_update_time: now,
+            });
+          await knex('SKU').where('sku_id', item.sku_id).update({ stock_quantity: newStock });
+        }
+
         created++;
       } catch {
         skipped++;
