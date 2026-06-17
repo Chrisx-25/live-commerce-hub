@@ -102,19 +102,19 @@ client/src/
 npm run db:reset   →   从备份文件恢复全库 (db-restore.ts)
 ```
 
-- **备份文件（仓库内）**: `server/db-backups/live_commerce_hub_2026-06-17.bak.gz` (30MB, gzip 压缩，已纳入 Git)
-- **解压后**: `server/db-backups/live_commerce_hub_2026-06-17.bak` (103MB, 28表/333,705行)
+- **备份文件（仓库内）**: `server/db-backups/live_commerce_hub_2026-06-17.bak.gz` (42MB, gzip 压缩，已纳入 Git)
+- **解压后**: `server/db-backups/live_commerce_hub_2026-06-17.bak` (158MB, 28表)
 - **恢复方式**: `db-restore.ts` 自动检测 `.bak.gz`，先解压再通过 sqlcmd RESTORE DATABASE WITH REPLACE 恢复
 - **前置条件**: MSSQL 运行中，sa 密码正确（从 .env 读取）
 - **注意事项**: 恢复期间自动断开所有连接 (SINGLE_USER)，恢复后需重启后端
 - **列出备份**: `npx tsx db-restore.ts --list`
 - **手动指定备份**: `npx tsx db-restore.ts --bak <path>`（支持 .bak 和 .bak.gz）
 
-#### 新队友快速上手
+#### 新队友首次拉取
 
 ```bash
 # 1. 克隆仓库
-git clone <repo-url> && cd live-commerce-hub
+git clone https://github.com/Chrisx-25/live-commerce-hub.git && cd live-commerce-hub
 
 # 2. 配置 .env（从 .env.example 复制，填入 MSSQL sa 密码）
 cp server/.env.example server/.env
@@ -122,12 +122,20 @@ cp server/.env.example server/.env
 # 3. 安装依赖
 npm install && cd server && npm install && cd ../client && npm install && cd ..
 
-# 4. 恢复数据库（自动解压 .bak.gz → .bak → RESTORE）
+# 4. 恢复数据库（自动解压 .bak.gz → RESTORE，约10秒）
 cd server && npm run db:reset
 
 # 5. 启动项目
 cd .. && npm run dev
 # 前端 :5173 | 后端 :3000 | 默认账号 EMP001/123456
+```
+
+#### 已配置的队友更新
+
+```bash
+git pull origin wkl            # 拉取最新代码 + 备份
+cd server && npm run db:reset  # 恢复数据库（同步导师的最新数据节点）
+cd .. && npm run dev           # 启动
 ```
 
 ### 数据库生成 (db:regenerate) — 仅开发/改表结构时使用
@@ -157,6 +165,7 @@ npm run db:regenerate   →   migrate → seed → LLM增强 (全库清空+随�
 
 | 日期 | 变更 | 影响范围 |
 |------|------|---------|
+| 2026-06-17 | **数据库备份节点更新**: 备份 42MB (158MB解压), 28表全量数据；修复 34 场已排期但无计划的场次；新增队友更新指令 | `server/db-backups/`、`CLAUDE.md` |
 | 2026-06-17 | **数据库安全加固**: `db:reset` 改为从备份恢复 (安全!!)；新增 `db:regenerate` (旧 destructive 重建)、`db:backup` 快照命令、`db-restore.ts` 恢复工具；LoginPage 401 死循环修复；场次安排 DESC 排序修复 | `server/package.json`、`CLAUDE.md`、`LoginPage.vue`、`AnchorProductPlanningPage.vue` |
 | 2026-06-17 | **数据库管理规范化**: 001 seed 修正 RBAC 映射(16/16/5/5/7/20)、王凯乐为第一主播、EMP005 关联 anchor_id；新增 `npm run db:reset` 统一重置命令；新增 `db-snapshot.ts` 快照工具；删除 `run-full-seed.ts` 补丁脚本 | `server/` |
 | 2026-06-17 | **数据库初始化修复**: 运行 `llm-enhance-seed.ts` 补全 LLM 增强数据（商品名/描述/脚本/订单等），解决占位符 "爆款候选产品" 问题 | 全库 |
@@ -181,9 +190,9 @@ npm run db:regenerate   →   migrate → seed → LLM增强 (全库清空+随�
 - `npm run dev` 在根目录执行（concurrently 管理前后端进程）
 - liveSimulator 在 server 启动时自动恢复活跃的直播模拟
 - 验证计划完整记录在 `验证计划.md`（含种子数据量核对表 + 问题修复记录）
-- **数据库复位**: 数据异常需要恢复时运行 `cd server && npm run db:reset`，从备份文件 `db-backups/live_commerce_hub_2026-06-17.bak` (103MB, 28表/333,705行) 恢复，耗时 <1 秒。恢复后需重启后端。
+- **数据库复位**: 数据异常需要恢复时运行 `cd server && npm run db:reset`，从备份文件 `db-backups/live_commerce_hub_2026-06-17.bak.gz` (42MB 压缩包 / 解压后 158MB, 28表) 恢复，耗时约 10 秒。恢复后需重启后端。
 - **数据库备份恢复**: 
-  - 备份文件: `server/db-backups/live_commerce_hub_2026-06-17.bak` (103MB, 28表/333,705行)
+  - 备份文件: `server/db-backups/live_commerce_hub_2026-06-17.bak.gz` (42MB, 28表)
   - 恢复命令: `npm run db:reset` (推荐) 或手动 `npx tsx db-restore.ts --bak <path>`
   - 数据快照: `server/snapshot-*.json` (行数参照表)
 
