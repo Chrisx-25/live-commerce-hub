@@ -42,6 +42,8 @@ test_screenshots/
 
 # ===== Database backups (large binary files) =====
 server/db-backups/
+server/db/export.sql
+server/db/*.bak
 
 # ===== Temporary files =====
 *.tmp
